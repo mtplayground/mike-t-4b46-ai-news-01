@@ -75,3 +75,33 @@ model Subspace {
 
   @@map("subspaces")
 }
+
+model Post {
+  id   String    @id @default(cuid()) @db.Text
+  tags PostTag[]
+
+  @@map("posts")
+}
+
+model Tag {
+  id        String    @id @default(cuid()) @db.Text
+  name      String    @db.Text
+  slug      String    @unique @db.Text
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  posts     PostTag[]
+
+  @@map("tags")
+}
+
+model PostTag {
+  postId    String   @map("post_id") @db.Text
+  tagId     String   @map("tag_id") @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+  @@index([tagId])
+  @@map("post_tags")
+}
