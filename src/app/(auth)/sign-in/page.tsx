@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { AdminLoginForm } from "@/components/admin-login-form";
 
 export const metadata: Metadata = {
@@ -46,12 +45,12 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         aria-label="Sign-in options"
         className="grid gap-4 rounded-lg border border-border bg-panel p-5"
       >
-        <Link
+        <a
           className="flex h-11 items-center justify-center rounded-md bg-accent px-4 text-sm font-bold text-white no-underline"
           href={loginHref}
         >
           Continue with Google
-        </Link>
+        </a>
         <div className="h-px bg-border" />
         <AdminLoginForm returnTo={returnTo === "/" ? "/admin" : returnTo} />
       </section>
