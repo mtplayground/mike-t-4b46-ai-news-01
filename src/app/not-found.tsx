@@ -1,10 +1,16 @@
 export default function NotFound() {
   return (
-    <main className="page">
-      <header className="page-header">
-        <p className="eyebrow">Not found</p>
-        <h1>Page not found</h1>
-        <p>The requested route does not exist.</p>
+    <main className="mx-auto w-full max-w-[1080px] px-3 py-8 sm:px-4 sm:py-12">
+      <header className="mb-8 grid gap-3">
+        <p className="m-0 text-sm font-bold uppercase text-accent-strong">
+          Not found
+        </p>
+        <h1 className="m-0 max-w-3xl text-[clamp(2rem,6vw,4.5rem)] leading-none">
+          Page not found
+        </h1>
+        <p className="m-0 max-w-2xl text-base leading-7 text-muted">
+          The requested route does not exist.
+        </p>
       </header>
     </main>
   );

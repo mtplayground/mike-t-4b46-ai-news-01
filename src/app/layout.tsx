@@ -10,11 +10,13 @@ export const metadata: Metadata = {
   description: "Base application shell.",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en">
-      <body>
-        <div className="site-shell">{children}</div>
+      <body className="min-h-screen bg-background font-sans text-foreground antialiased">
+        <div className="min-h-screen">{children}</div>
       </body>
     </html>
   );
