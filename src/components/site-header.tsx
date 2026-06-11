@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { SessionControls } from "@/components/session-controls";
 
 export function SiteHeader() {
@@ -6,16 +5,16 @@ export function SiteHeader() {
     <header className="bg-panel/90 border-b border-border">
       <div className="mx-auto flex w-full max-w-[1080px] items-center justify-between gap-4 px-3 py-3 sm:px-4">
         <div className="flex min-w-0 items-center gap-5">
-          <Link className="text-base font-bold no-underline" href="/">
+          <a className="text-base font-bold no-underline" href="/">
             AI News
-          </Link>
+          </a>
           <nav aria-label="Primary" className="flex items-center gap-3 text-sm">
-            <Link className="text-muted no-underline" href="/subspaces">
+            <a className="text-muted no-underline" href="/subspaces">
               Subspaces
-            </Link>
-            <Link className="text-muted no-underline" href="/tags">
+            </a>
+            <a className="text-muted no-underline" href="/tags">
               Tags
-            </Link>
+            </a>
           </nav>
         </div>
         <SessionControls />
