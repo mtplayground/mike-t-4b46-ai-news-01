@@ -64,3 +64,14 @@ model Session {
   @@index([userSub])
   @@map("sessions")
 }
+
+model Subspace {
+  id          String   @id @default(cuid()) @db.Text
+  name        String   @db.Text
+  slug        String   @unique @db.Text
+  description String   @default("") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("subspaces")
+}
