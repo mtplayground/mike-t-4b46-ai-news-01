@@ -1,9 +1,9 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import type { User } from "@/generated/prisma/client";
-import { getAuthEnv, getSelfUrl } from "@/lib/env";
+import { getAuthEnv } from "@/lib/env";
+import { MCTAI_SESSION_COOKIE } from "@/lib/session-cookies";
 import { prisma } from "@/lib/db";
-
-export const MCTAI_SESSION_COOKIE = "mctai_session";
+export { buildLoginUrl } from "@/lib/auth-redirect";
 
 type CookieReader = {
   get(name: string): { value: string } | undefined;
@@ -62,39 +62,6 @@ function coerceClaims(payload: JWTPayload): MctaiSessionClaims | null {
       typeof picture === "string" && picture.length > 0 ? picture : undefined,
     sub: subject,
   };
-}
-
-function toFrontendReturnUrl(returnTo: string | null | undefined): URL {
-  const selfUrl = new URL(getSelfUrl());
-  const candidate = returnTo && returnTo.length > 0 ? returnTo : "/";
-  let target: URL;
-
-  try {
-    target = candidate.startsWith("/")
-      ? new URL(candidate, selfUrl)
-      : new URL(candidate);
-  } catch {
-    target = selfUrl;
-  }
-
-  if (target.origin !== selfUrl.origin || target.pathname.startsWith("/api/")) {
-    return selfUrl;
-  }
-
-  return target;
-}
-
-export function buildLoginUrl(returnTo?: string | null): URL {
-  const auth = getAuthEnv();
-  const loginUrl = new URL("/login", auth.url);
-
-  loginUrl.searchParams.set("app_token", auth.appToken);
-  loginUrl.searchParams.set(
-    "return_to",
-    toFrontendReturnUrl(returnTo).toString(),
-  );
-
-  return loginUrl;
 }
 
 export async function verifySessionToken(
