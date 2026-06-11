@@ -11,6 +11,8 @@ node_modules/
 .pipeline-state.json
 .gitkeep
 .progress
+.db_decision
+.storage_decision
 
 # Local environment files
 .env
@@ -21,6 +23,7 @@ node_modules/
 # Next.js build output
 .next/
 out/
+tsconfig.tsbuildinfo
 
 # Package manager and tooling caches
 .turbo/
