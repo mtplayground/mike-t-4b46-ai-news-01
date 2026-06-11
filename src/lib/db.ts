@@ -6,6 +6,9 @@ const databaseUrl = getDatabaseUrl();
 
 const adapter = new PrismaPg({
   connectionString: databaseUrl,
+  ssl: databaseUrl.includes("sslmode=require")
+    ? { rejectUnauthorized: false }
+    : undefined,
 });
 
 const globalForPrisma = globalThis as typeof globalThis & {
