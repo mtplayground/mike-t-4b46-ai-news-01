@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { renderMarkdownToHtml } from "@/lib/markdown";
+import { buildPageMetadata } from "@/lib/page-metadata";
 
 export const dynamic = "force-dynamic";
 
@@ -94,15 +95,19 @@ export async function generateMetadata({
   const post = await getPost(slug, postId);
 
   if (!post) {
-    return {
+    return buildPageMetadata({
+      description: "This AI News post could not be found.",
+      path: `/s/${slug}/${postId}`,
       title: "Post not found",
-    };
+    });
   }
 
-  return {
-    title: getPostTitle(post.bodyMarkdown),
+  return buildPageMetadata({
     description: getPostDescription(post.bodyMarkdown),
-  };
+    path: `/s/${post.subspace.slug}/${post.id}`,
+    title: getPostTitle(post.bodyMarkdown),
+    type: "article",
+  });
 }
 
 export default async function PostDetailPage({ params }: PostDetailPageProps) {
