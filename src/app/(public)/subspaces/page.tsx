@@ -61,7 +61,8 @@ export default async function SubspacesPage() {
                   <Link
                     className="text-foreground no-underline hover:text-accent-strong"
                     href={`/s/${subspace.slug}`}
-                  >
+                  
+                      prefetch={false}>
                     {subspace.name}
                   </Link>
                 </h2>
@@ -81,7 +82,8 @@ export default async function SubspacesPage() {
               <Link
                 className="mt-auto inline-flex text-sm font-bold text-accent-strong no-underline"
                 href={`/s/${subspace.slug}`}
-              >
+              
+                      prefetch={false}>
                 View subspace
               </Link>
             </article>

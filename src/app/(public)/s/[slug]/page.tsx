@@ -67,7 +67,8 @@ export default async function SubspaceDetailPage({
         <Link
           className="text-sm font-bold text-accent-strong no-underline"
           href="/subspaces"
-        >
+        
+                      prefetch={false}>
           Back to subspaces
         </Link>
       </nav>

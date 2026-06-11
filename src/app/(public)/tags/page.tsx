@@ -64,7 +64,8 @@ export default async function TagsPage() {
                   <Link
                     className="text-foreground no-underline hover:text-accent-strong"
                     href={`/t/${tag.slug}`}
-                  >
+                  
+                      prefetch={false}>
                     {tag.name}
                   </Link>
                 </h2>
@@ -80,7 +81,8 @@ export default async function TagsPage() {
               <Link
                 className="mt-auto inline-flex text-sm font-bold text-accent-strong no-underline"
                 href={`/t/${tag.slug}`}
-              >
+              
+                      prefetch={false}>
                 View tag
               </Link>
             </article>

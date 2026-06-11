@@ -151,13 +151,15 @@ export default async function HomePage() {
           <Link
             className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-white no-underline"
             href="/subspaces"
-          >
+          
+                      prefetch={false}>
             Browse subspaces
           </Link>
           <Link
             className="rounded-md border border-border bg-panel px-4 py-2 text-sm font-bold text-foreground no-underline"
             href="/tags"
-          >
+          
+                      prefetch={false}>
             Browse tags
           </Link>
         </div>
@@ -190,7 +192,8 @@ export default async function HomePage() {
                     <Link
                       className="text-foreground no-underline hover:text-accent-strong"
                       href={`/s/${post.subspace.slug}/${post.id}`}
-                    >
+                    
+                      prefetch={false}>
                       {getPostTitle(post.bodyMarkdown)}
                     </Link>
                   </h3>
@@ -217,7 +220,8 @@ export default async function HomePage() {
                         className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-bold text-accent-strong no-underline"
                         href={`/t/${tag.slug}`}
                         key={tag.id}
-                      >
+                      
+                      prefetch={false}>
                         #{tag.name}
                       </Link>
                     ))}
@@ -248,7 +252,8 @@ export default async function HomePage() {
           <Link
             className="text-sm font-bold text-accent-strong no-underline"
             href="/subspaces"
-          >
+          
+                      prefetch={false}>
             View all
           </Link>
         </div>
@@ -265,7 +270,8 @@ export default async function HomePage() {
                     <Link
                       className="text-foreground no-underline hover:text-accent-strong"
                       href={`/s/${subspace.slug}`}
-                    >
+                    
+                      prefetch={false}>
                       {subspace.name}
                     </Link>
                   </h3>

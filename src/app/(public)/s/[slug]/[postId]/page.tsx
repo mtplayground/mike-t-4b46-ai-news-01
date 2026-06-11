@@ -147,14 +147,16 @@ export default async function PostDetailPage({ params }: PostDetailPageProps) {
         <Link
           className="font-bold text-accent-strong no-underline"
           href="/subspaces"
-        >
+        
+                      prefetch={false}>
           Subspaces
         </Link>
         <span className="text-muted">/</span>
         <Link
           className="font-bold text-accent-strong no-underline"
           href={`/s/${post.subspace.slug}`}
-        >
+        
+                      prefetch={false}>
           {post.subspace.name}
         </Link>
       </nav>
@@ -186,7 +188,8 @@ export default async function PostDetailPage({ params }: PostDetailPageProps) {
                 className="rounded-md border border-border bg-panel px-3 py-1.5 text-sm font-bold text-accent-strong no-underline"
                 href={`/t/${tag.slug}`}
                 key={tag.id}
-              >
+              
+                      prefetch={false}>
                 #{tag.name}
               </Link>
             ))}

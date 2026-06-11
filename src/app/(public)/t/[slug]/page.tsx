@@ -77,7 +77,8 @@ export default async function TagDetailPage({ params }: TagDetailPageProps) {
         <Link
           className="text-sm font-bold text-accent-strong no-underline"
           href="/tags"
-        >
+        
+                      prefetch={false}>
           Back to tags
         </Link>
       </nav>
