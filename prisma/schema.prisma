@@ -25,6 +25,7 @@ model User {
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   lastSeenAt    DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
   accounts      Account[]
+  posts         Post[]
   sessions      Session[]
 
   @@map("users")
@@ -72,14 +73,24 @@ model Subspace {
   description String   @default("") @db.Text
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  posts       Post[]
 
   @@map("subspaces")
 }
 
 model Post {
-  id   String    @id @default(cuid()) @db.Text
-  tags PostTag[]
+  id           String    @id @default(cuid()) @db.Text
+  bodyMarkdown String    @map("body_markdown") @db.Text
+  authorSub    String    @map("author_sub") @db.Text
+  subspaceId   String    @map("subspace_id") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  author       User      @relation(fields: [authorSub], references: [sub], onDelete: Restrict)
+  subspace     Subspace  @relation(fields: [subspaceId], references: [id], onDelete: Restrict)
+  tags         PostTag[]
 
+  @@index([authorSub])
+  @@index([subspaceId])
   @@map("posts")
 }
 
