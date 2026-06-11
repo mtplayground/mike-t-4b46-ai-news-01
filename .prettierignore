@@ -1,0 +1,15 @@
+.next/
+node_modules/
+coverage/
+playwright-report/
+test-results/
+package-lock.json
+tsconfig.tsbuildinfo
+.claude/
+.database_url
+.db_decision
+.env
+.env.*
+.gh_token
+.progress
+.storage_decision
