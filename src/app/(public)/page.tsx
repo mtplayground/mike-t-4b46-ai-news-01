@@ -51,6 +51,12 @@ export default function HomePage() {
           <p className="m-0 text-sm leading-6 text-muted">
             Tags will connect posts across spaces for quick filtering.
           </p>
+          <Link
+            className="mt-4 inline-flex text-sm font-bold text-accent-strong no-underline"
+            href="/tags"
+          >
+            Browse tags
+          </Link>
         </article>
         <article className="min-h-40 rounded-lg border border-border bg-panel p-5">
           <h2 className="mb-2.5 mt-0 text-lg">Posts</h2>

@@ -13,6 +13,9 @@ export function SiteHeader() {
             <Link className="text-muted no-underline" href="/subspaces">
               Subspaces
             </Link>
+            <Link className="text-muted no-underline" href="/tags">
+              Tags
+            </Link>
           </nav>
         </div>
         <SessionControls />
