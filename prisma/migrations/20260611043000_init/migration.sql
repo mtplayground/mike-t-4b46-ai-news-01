@@ -1,0 +1,2 @@
+-- Establishes the initial PostgreSQL migration baseline.
+-- Application models are added by later issue-scoped migrations.

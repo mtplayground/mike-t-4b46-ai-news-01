@@ -24,6 +24,7 @@ node_modules/
 .next/
 out/
 tsconfig.tsbuildinfo
+src/generated/prisma/
 
 # Package manager and tooling caches
 .turbo/

@@ -4,6 +4,7 @@ coverage/
 playwright-report/
 test-results/
 package-lock.json
+src/generated/prisma/
 tsconfig.tsbuildinfo
 .claude/
 .database_url
