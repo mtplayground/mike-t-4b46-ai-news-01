@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +57,14 @@ export default async function SubspacesPage() {
               key={subspace.id}
             >
               <div className="grid gap-1">
-                <h2 className="m-0 text-xl">{subspace.name}</h2>
+                <h2 className="m-0 text-xl">
+                  <Link
+                    className="text-foreground no-underline hover:text-accent-strong"
+                    href={`/s/${subspace.slug}`}
+                  >
+                    {subspace.name}
+                  </Link>
+                </h2>
                 <p className="m-0 break-all text-sm text-accent-strong">
                   /{subspace.slug}
                 </p>
@@ -70,6 +78,12 @@ export default async function SubspacesPage() {
                   No description yet.
                 </p>
               )}
+              <Link
+                className="mt-auto inline-flex text-sm font-bold text-accent-strong no-underline"
+                href={`/s/${subspace.slug}`}
+              >
+                View subspace
+              </Link>
             </article>
           ))}
         </section>
