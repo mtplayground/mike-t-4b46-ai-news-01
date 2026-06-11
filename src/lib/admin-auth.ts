@@ -3,8 +3,8 @@ import type { Session, User } from "@/generated/prisma/client";
 import { UserRole } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db";
 import { getAdminPassword } from "@/lib/env";
-
-export const ADMIN_SESSION_COOKIE = "admin_session";
+import { ADMIN_SESSION_COOKIE } from "@/lib/session-cookies";
+export { ADMIN_SESSION_COOKIE } from "@/lib/session-cookies";
 
 const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const ADMIN_USER_EMAIL = "admin@admin.local";
