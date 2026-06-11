@@ -6,3 +6,61 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum UserRole {
+  USER  @map("user")
+  ADMIN @map("admin")
+
+  @@map("user_role")
+}
+
+model User {
+  sub           String    @id @db.Text
+  email         String    @unique @db.Text
+  emailVerified Boolean   @default(false) @map("email_verified")
+  name          String?   @db.Text
+  pictureUrl    String?   @map("picture_url") @db.Text
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lastSeenAt    DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  accounts      Account[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String   @id @default(cuid()) @db.Text
+  userSub           String   @map("user_sub") @db.Text
+  type              String   @db.Text
+  provider          String   @db.Text
+  providerAccountId String   @map("provider_account_id") @db.Text
+  refreshToken      String?  @map("refresh_token") @db.Text
+  accessToken       String?  @map("access_token") @db.Text
+  expiresAt         Int?     @map("expires_at")
+  tokenType         String?  @map("token_type") @db.Text
+  scope             String?  @db.Text
+  idToken           String?  @map("id_token") @db.Text
+  sessionState      String?  @map("session_state") @db.Text
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user              User     @relation(fields: [userSub], references: [sub], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userSub])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid()) @db.Text
+  sessionToken String   @unique @map("session_token") @db.Text
+  userSub      String   @map("user_sub") @db.Text
+  expires      DateTime @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user         User     @relation(fields: [userSub], references: [sub], onDelete: Cascade)
+
+  @@index([userSub])
+  @@map("sessions")
+}
