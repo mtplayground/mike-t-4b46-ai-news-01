@@ -3,7 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { renderMarkdownToHtml } from "@/lib/markdown";
-import { buildPageMetadata } from "@/lib/page-metadata";
+import {
+  buildArticleJsonLd,
+  buildPageMetadata,
+  serializeJsonLd,
+} from "@/lib/page-metadata";
 
 export const dynamic = "force-dynamic";
 
@@ -120,10 +124,25 @@ export default async function PostDetailPage({ params }: PostDetailPageProps) {
 
   const renderedHtml = renderMarkdownToHtml(post.bodyMarkdown);
   const title = getPostTitle(post.bodyMarkdown);
+  const description = getPostDescription(post.bodyMarkdown);
   const authorName = post.author.name || post.author.email;
+  const articleJsonLd = buildArticleJsonLd({
+    authorName,
+    dateModified: post.updatedAt,
+    datePublished: post.createdAt,
+    description,
+    keywords: post.tags.map(({ tag }) => tag.name),
+    path: `/s/${post.subspace.slug}/${post.id}`,
+    section: post.subspace.name,
+    title,
+  });
 
   return (
     <main className="mx-auto grid w-full max-w-[920px] gap-8 px-3 py-8 sm:px-4 sm:py-12">
+      <script
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(articleJsonLd) }}
+        type="application/ld+json"
+      />
       <nav aria-label="Breadcrumb" className="flex flex-wrap gap-2 text-sm">
         <Link
           className="font-bold text-accent-strong no-underline"

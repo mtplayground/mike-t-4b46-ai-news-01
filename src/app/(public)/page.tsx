@@ -3,6 +3,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import {
   buildPageMetadata,
+  buildSiteJsonLd,
+  serializeJsonLd,
   SITE_DESCRIPTION,
   SITE_NAME,
   SITE_SLOGAN,
@@ -126,9 +128,14 @@ async function getHomeData() {
 
 export default async function HomePage() {
   const { latestPosts, subspaces } = await getHomeData();
+  const siteJsonLd = buildSiteJsonLd();
 
   return (
     <main className="mx-auto grid w-full max-w-[1080px] gap-10 px-3 py-8 sm:px-4 sm:py-12">
+      <script
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(siteJsonLd) }}
+        type="application/ld+json"
+      />
       <header className="grid gap-5">
         <p className="m-0 text-sm font-bold uppercase text-accent-strong">
           {SITE_NAME}
