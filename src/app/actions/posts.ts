@@ -163,13 +163,19 @@ function getTagIdValues(input: FormData | PostInput): string[] {
       ? [...input.getAll("tagIds"), ...input.getAll("tagIds[]")]
       : [input.tagIds];
 
-  const splitValues = values.flatMap((value) => {
-    if (typeof value !== "string") {
-      return [];
-    }
+  const splitValues = values.flatMap(
+    function collectStringValues(value): string[] {
+      if (Array.isArray(value)) {
+        return value.flatMap(collectStringValues);
+      }
 
-    return value.split(",");
-  });
+      if (typeof value !== "string") {
+        return [];
+      }
+
+      return value.split(",");
+    },
+  );
 
   return Array.from(
     new Set(

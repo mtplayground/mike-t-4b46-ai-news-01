@@ -1,6 +1,8 @@
-import { MarkdownMediaUploader } from "@/components/markdown-media-uploader";
-import { SubspaceAdminPanel } from "@/components/subspace-admin-panel";
+import { PostEditorPanel } from "@/components/post-editor-panel";
 import type { SerializedSubspace } from "@/app/actions/subspaces";
+import type { SerializedPost } from "@/app/actions/posts";
+import type { SerializedTag } from "@/app/actions/tags";
+import { SubspaceAdminPanel } from "@/components/subspace-admin-panel";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -27,8 +29,86 @@ async function getSubspaces(): Promise<SerializedSubspace[]> {
   }));
 }
 
+async function getTags(): Promise<SerializedTag[]> {
+  const tags = await prisma.tag.findMany({
+    orderBy: [
+      {
+        name: "asc",
+      },
+      {
+        createdAt: "asc",
+      },
+    ],
+  });
+
+  return tags.map((tag) => ({
+    createdAt: tag.createdAt.toISOString(),
+    id: tag.id,
+    name: tag.name,
+    slug: tag.slug,
+    updatedAt: tag.updatedAt.toISOString(),
+  }));
+}
+
+async function getPosts(): Promise<SerializedPost[]> {
+  const posts = await prisma.post.findMany({
+    include: {
+      author: {
+        select: {
+          email: true,
+          name: true,
+          pictureUrl: true,
+          sub: true,
+        },
+      },
+      subspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+      tags: {
+        include: {
+          tag: true,
+        },
+        orderBy: {
+          tag: {
+            name: "asc",
+          },
+        },
+      },
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+  });
+
+  return posts.map((post) => ({
+    author: post.author,
+    authorSub: post.authorSub,
+    bodyMarkdown: post.bodyMarkdown,
+    createdAt: post.createdAt.toISOString(),
+    id: post.id,
+    subspace: post.subspace,
+    subspaceId: post.subspaceId,
+    tags: post.tags.map(({ tag }) => ({
+      createdAt: tag.createdAt.toISOString(),
+      id: tag.id,
+      name: tag.name,
+      slug: tag.slug,
+      updatedAt: tag.updatedAt.toISOString(),
+    })),
+    updatedAt: post.updatedAt.toISOString(),
+  }));
+}
+
 export default async function AdminPage() {
-  const subspaces = await getSubspaces();
+  const [posts, subspaces, tags] = await Promise.all([
+    getPosts(),
+    getSubspaces(),
+    getTags(),
+  ]);
 
   return (
     <main className="mx-auto grid w-full max-w-[1080px] gap-8 px-3 py-8 sm:px-4 sm:py-12">
@@ -52,10 +132,14 @@ export default async function AdminPage() {
       </section>
 
       <section
-        aria-label="Markdown media uploader"
+        aria-label="Post management"
         className="rounded-lg border border-border bg-panel p-5"
       >
-        <MarkdownMediaUploader />
+        <PostEditorPanel
+          initialPosts={posts}
+          subspaces={subspaces}
+          tags={tags}
+        />
       </section>
     </main>
   );
