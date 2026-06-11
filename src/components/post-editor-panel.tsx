@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import {
   createPostAction,
+  deletePostAction,
   type PostActionResult,
   type SerializedPost,
   updatePostAction,
@@ -81,11 +82,18 @@ export function PostEditorPanel({
   });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [deleteCandidateId, setDeleteCandidateId] = useState<string | null>(
+    null,
+  );
   const [isPending, startTransition] = useTransition();
 
   const selectedPost = useMemo(
     () => posts.find((post) => post.id === selectedId) ?? null,
     [posts, selectedId],
+  );
+  const deleteCandidate = useMemo(
+    () => posts.find((post) => post.id === deleteCandidateId) ?? null,
+    [deleteCandidateId, posts],
   );
   const mode = selectedPost ? "Edit post" : "Create post";
   const canSubmit = subspaces.length > 0 && !isPending;
@@ -123,6 +131,7 @@ export function PostEditorPanel({
     setFormState(formStateForPost(post));
     setFieldErrors({});
     setMessage(null);
+    setDeleteCandidateId(null);
   }
 
   function resetForm() {
@@ -133,6 +142,7 @@ export function PostEditorPanel({
     });
     setFieldErrors({});
     setMessage(null);
+    setDeleteCandidateId(null);
   }
 
   function submitForm(event: React.FormEvent<HTMLFormElement>) {
@@ -167,6 +177,32 @@ export function PostEditorPanel({
       setSelectedId(result.post.id);
       setFormState(formStateForPost(result.post));
       setMessage(selectedPost ? "Post updated." : "Post created.");
+    });
+  }
+
+  function confirmDelete() {
+    if (!deleteCandidate) {
+      return;
+    }
+
+    setFieldErrors({});
+    setMessage(null);
+
+    startTransition(async () => {
+      const result = await deletePostAction(deleteCandidate.id);
+
+      if (!result.ok) {
+        setFieldErrors(result.fieldErrors ?? {});
+        setMessage(result.error);
+        return;
+      }
+
+      setPosts((current) => current.filter((post) => post.id !== result.id));
+      if (selectedId === result.id) {
+        resetForm();
+      }
+      setDeleteCandidateId(null);
+      setMessage("Post deleted.");
     });
   }
 
@@ -280,14 +316,63 @@ export function PostEditorPanel({
           ) : null}
           {message ? <p className="m-0 text-sm text-muted">{message}</p> : null}
 
-          <button
-            className="h-11 justify-self-start rounded-md bg-accent px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!canSubmit}
-            type="submit"
-          >
-            {isPending ? "Saving" : selectedPost ? "Save post" : "Create post"}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              className="h-11 rounded-md bg-accent px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!canSubmit}
+              type="submit"
+            >
+              {isPending
+                ? "Saving"
+                : selectedPost
+                  ? "Save post"
+                  : "Create post"}
+            </button>
+            {selectedPost ? (
+              <button
+                className="h-11 rounded-md border border-red-300 bg-panel px-4 text-sm font-bold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isPending}
+                onClick={() => setDeleteCandidateId(selectedPost.id)}
+                type="button"
+              >
+                Delete
+              </button>
+            ) : null}
+          </div>
         </form>
+
+        {deleteCandidate ? (
+          <div
+            aria-live="polite"
+            className="grid gap-3 rounded-lg border border-red-300 bg-red-50 p-4"
+          >
+            <p className="m-0 text-sm leading-6 text-red-900">
+              Delete this post from /{deleteCandidate.subspace.slug}? This
+              removes the post immediately.
+            </p>
+            <p className="m-0 line-clamp-3 text-sm leading-6 text-red-900">
+              {getPostSummary(deleteCandidate)}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                className="h-10 rounded-md bg-red-700 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isPending}
+                onClick={() => void confirmDelete()}
+                type="button"
+              >
+                Confirm delete
+              </button>
+              <button
+                className="h-10 rounded-md border border-border bg-panel px-4 text-sm font-bold text-foreground"
+                disabled={isPending}
+                onClick={() => setDeleteCandidateId(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section aria-label="Existing posts" className="grid content-start gap-3">
