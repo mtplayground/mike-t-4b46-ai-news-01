@@ -1,17 +1,22 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import {
+  buildPageMetadata,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_SLOGAN,
+} from "@/lib/page-metadata";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "AI News",
-  description:
-    "Follow AI news posts by subspace, tag, and author across the site.",
-};
+export const metadata: Metadata = buildPageMetadata({
+  absoluteTitle: true,
+  description: SITE_DESCRIPTION,
+  path: "/",
+  title: SITE_NAME,
+});
 
-const SITE_NAME = "AI News";
-const SITE_SLOGAN = "Follow posts by subspace, tag, and author.";
 const LATEST_POST_LIMIT = 10;
 
 function cleanMarkdownLine(line: string): string {

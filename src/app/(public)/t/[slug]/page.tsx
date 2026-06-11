@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { buildPageMetadata } from "@/lib/page-metadata";
 
 export const dynamic = "force-dynamic";
 
@@ -45,15 +46,21 @@ export async function generateMetadata({
   const tag = await getTag(slug);
 
   if (!tag) {
-    return {
+    return buildPageMetadata({
+      description: "This AI News tag could not be found.",
+      path: `/t/${slug}`,
       title: "Tag not found",
-    };
+    });
   }
 
-  return {
+  return buildPageMetadata({
     title: tag.name,
-    description: `Posts tagged ${tag.name}.`,
-  };
+    description:
+      tag.posts.length === 1
+        ? `Read 1 AI News post tagged ${tag.name}.`
+        : `Read ${tag.posts.length} AI News posts tagged ${tag.name}.`,
+    path: `/t/${tag.slug}`,
+  });
 }
 
 export default async function TagDetailPage({ params }: TagDetailPageProps) {

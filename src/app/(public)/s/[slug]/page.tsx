@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { buildPageMetadata } from "@/lib/page-metadata";
 
 export const dynamic = "force-dynamic";
 
@@ -34,17 +35,20 @@ export async function generateMetadata({
   const subspace = await getSubspace(slug);
 
   if (!subspace) {
-    return {
+    return buildPageMetadata({
+      description: "This AI News subspace could not be found.",
+      path: `/s/${slug}`,
       title: "Subspace not found",
-    };
+    });
   }
 
-  return {
+  return buildPageMetadata({
     title: subspace.name,
     description:
       subspace.description ||
       `Read posts and updates from the ${subspace.name} subspace.`,
-  };
+    path: `/s/${subspace.slug}`,
+  });
 }
 
 export default async function SubspaceDetailPage({
