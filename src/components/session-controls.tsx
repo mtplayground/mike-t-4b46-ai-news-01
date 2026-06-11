@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type SessionUser = {
@@ -133,12 +134,13 @@ export function SessionControls() {
 
   if (!session) {
     return (
-      <a
+      <Link
         className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-white no-underline"
         href="/sign-in"
+        prefetch={false}
       >
         Sign in
-      </a>
+      </Link>
     );
   }
 
