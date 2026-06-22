@@ -1,5 +1,6 @@
 mod admin;
 mod auth;
+mod bot_posts;
 mod authorization;
 mod config;
 mod db;
@@ -15,6 +16,7 @@ use std::{env, error::Error, net::SocketAddr};
 
 use admin::{router as admin_router, AdminAuth};
 use auth::{router as auth_router, AuthVerifier};
+use bot_posts::router as bot_posts_router;
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use config::ServerConfig;
 use db::Database;
@@ -87,6 +89,7 @@ fn build_router(state: AppState) -> Router {
     Router::new()
         .merge(admin_router())
         .merge(auth_router())
+        .merge(bot_posts_router())
         .merge(posts_router())
         .merge(subspaces_router())
         .merge(tags_router())
