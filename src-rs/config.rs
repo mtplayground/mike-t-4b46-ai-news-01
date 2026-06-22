@@ -1,8 +1,10 @@
 use std::{collections::HashMap, env, error::Error, fmt, fs, path::Path};
 
 const DEFAULT_ENV_FILE: &str = ".env.production";
+const MIN_AI_NEWS_BOT_API_TOKEN_LENGTH: usize = 32;
 const REQUIRED_ENV: &[&str] = &[
     "ADMIN_PASSWORD",
+    "AI_NEWS_BOT_API_TOKEN",
     "DATABASE_URL",
     "MCTAI_AUTH_APP_TOKEN",
     "MCTAI_AUTH_JWKS_URL",
@@ -50,9 +52,10 @@ pub struct ObjectStorageConfig {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ServerConfig {
     pub admin_password: String,
+    pub ai_news_bot_api_token: String,
     pub auth: AuthConfig,
     pub database_url: String,
     pub object_storage: ObjectStorageConfig,
@@ -70,6 +73,7 @@ pub enum ConfigError {
     MissingEnv(String),
     PlaceholderEnv(String),
     ShortAdminPassword,
+    ShortBotApiToken,
     ForbiddenGoogleOAuthEnv(Vec<String>),
 }
 
@@ -107,12 +111,30 @@ impl fmt::Display for ConfigError {
             Self::ShortAdminPassword => {
                 write!(formatter, "ADMIN_PASSWORD must be at least 16 characters")
             }
+            Self::ShortBotApiToken => write!(
+                formatter,
+                "AI_NEWS_BOT_API_TOKEN must be at least 32 characters"
+            ),
             Self::ForbiddenGoogleOAuthEnv(names) => write!(
                 formatter,
                 "Remove direct Google OAuth env vars; use myClawTeam auth instead: {}",
                 names.join(", ")
             ),
         }
+    }
+}
+
+impl fmt::Debug for ServerConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ServerConfig")
+            .field("admin_password", &"[redacted]")
+            .field("ai_news_bot_api_token", &"[redacted]")
+            .field("auth", &self.auth)
+            .field("database_url", &"[redacted]")
+            .field("object_storage", &self.object_storage)
+            .field("self_url", &self.self_url)
+            .finish()
     }
 }
 
@@ -151,10 +173,12 @@ impl ServerConfig {
         validate_object_storage_prefix(values)?;
         validate_object_storage_endpoint(values)?;
         validate_admin_password(values)?;
+        validate_bot_api_token(values)?;
         validate_no_google_oauth_secrets(values)?;
 
         Ok(Self {
             admin_password: require_env(values, "ADMIN_PASSWORD")?,
+            ai_news_bot_api_token: require_env(values, "AI_NEWS_BOT_API_TOKEN")?,
             auth: AuthConfig {
                 app_token: require_env(values, "MCTAI_AUTH_APP_TOKEN")?,
                 jwks_url: require_env(values, "MCTAI_AUTH_JWKS_URL")?,
@@ -353,6 +377,16 @@ fn validate_admin_password(values: &HashMap<String, String>) -> Result<(), Confi
 
     if admin_password.len() < 16 {
         Err(ConfigError::ShortAdminPassword)
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_bot_api_token(values: &HashMap<String, String>) -> Result<(), ConfigError> {
+    let token = require_env(values, "AI_NEWS_BOT_API_TOKEN")?;
+
+    if token.len() < MIN_AI_NEWS_BOT_API_TOKEN_LENGTH {
+        Err(ConfigError::ShortBotApiToken)
     } else {
         Ok(())
     }

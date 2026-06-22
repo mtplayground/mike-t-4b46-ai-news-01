@@ -13,6 +13,7 @@ const PLACEHOLDER_PATTERNS = [
 
 const requiredEnv = [
   "ADMIN_PASSWORD",
+  "AI_NEWS_BOT_API_TOKEN",
   "DATABASE_URL",
   "MCTAI_AUTH_APP_TOKEN",
   "MCTAI_AUTH_JWKS_URL",
@@ -154,6 +155,14 @@ function validateAdminPassword() {
   }
 }
 
+function validateBotApiToken() {
+  const value = getEnv("AI_NEWS_BOT_API_TOKEN");
+
+  if (value.length < 32) {
+    throw new Error("AI_NEWS_BOT_API_TOKEN must be at least 32 characters");
+  }
+}
+
 function validateNoGoogleOAuthSecrets() {
   const forbidden = [
     "GOOGLE_CLIENT_ID",
@@ -185,6 +194,7 @@ validateObjectStoragePrefix();
 validateObjectStorageEndpoint();
 validateBoolean("OBJECT_STORAGE_FORCE_PATH_STYLE");
 validateAdminPassword();
+validateBotApiToken();
 validateNoGoogleOAuthSecrets();
 
 console.log(`Environment validation passed (${requiredEnv.length} variables).`);
