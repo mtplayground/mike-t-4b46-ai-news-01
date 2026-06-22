@@ -2,12 +2,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import {
-  createSubspaceAction,
-  deleteSubspaceAction,
+  createSubspace,
+  deleteSubspace,
   type SerializedSubspace,
   type SubspaceActionResult,
-  updateSubspaceAction,
-} from "@/app/actions/subspaces";
+  updateSubspace,
+} from "@/lib/admin-api";
 
 type FieldErrors = NonNullable<
   Extract<SubspaceActionResult, { ok: false }>["fieldErrors"]
@@ -123,8 +123,8 @@ export function SubspaceAdminPanel({
 
     startTransition(async () => {
       const result = selectedSubspace
-        ? await updateSubspaceAction(selectedSubspace.id, input)
-        : await createSubspaceAction(input);
+        ? await updateSubspace(selectedSubspace.id, input)
+        : await createSubspace(input);
 
       if (!result.ok) {
         setFieldErrors(result.fieldErrors ?? {});
@@ -154,7 +154,7 @@ export function SubspaceAdminPanel({
     setMessage(null);
 
     startTransition(async () => {
-      const result = await deleteSubspaceAction(deleteCandidate.id);
+      const result = await deleteSubspace(deleteCandidate.id);
 
       if (!result.ok) {
         setFieldErrors(result.fieldErrors ?? {});

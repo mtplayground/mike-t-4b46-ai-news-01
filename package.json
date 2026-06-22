@@ -22,8 +22,6 @@
     "start:api": "HOST=${AXUM_HOST:-127.0.0.1} PORT=${AXUM_PORT:-8081} ./target/release/mike-t-4b46-ai-news-01-api"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1066.0",
-    "@aws-sdk/s3-request-presigner": "^3.1066.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "jose": "^6.2.3",

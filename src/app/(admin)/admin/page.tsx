@@ -1,7 +1,9 @@
 import { PostEditorPanel } from "@/components/post-editor-panel";
-import type { SerializedSubspace } from "@/app/actions/subspaces";
-import type { SerializedPost } from "@/app/actions/posts";
-import type { SerializedTag } from "@/app/actions/tags";
+import type {
+  SerializedPost,
+  SerializedSubspace,
+  SerializedTag,
+} from "@/lib/admin-api";
 import { SubspaceAdminPanel } from "@/components/subspace-admin-panel";
 import { prisma } from "@/lib/db";
 
