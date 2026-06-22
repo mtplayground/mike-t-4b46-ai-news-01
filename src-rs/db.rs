@@ -1,4 +1,4 @@
-use std::{error::Error, fmt, time::Duration};
+use std::{error::Error, fmt};
 
 use sqlx::{postgres::PgPoolOptions, PgPool};
 
@@ -40,12 +40,10 @@ pub struct Database {
 
 #[allow(dead_code)]
 impl Database {
-    pub async fn connect(config: &ServerConfig) -> Result<Self, DbError> {
+    pub fn connect(config: &ServerConfig) -> Result<Self, DbError> {
         let pool = PgPoolOptions::new()
             .max_connections(DEFAULT_MAX_CONNECTIONS)
-            .acquire_timeout(Duration::from_secs(10))
-            .connect(&config.database_url)
-            .await?;
+            .connect_lazy(&config.database_url)?;
 
         Ok(Self { pool })
     }
