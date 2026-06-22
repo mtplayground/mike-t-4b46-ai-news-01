@@ -1,33 +1,16 @@
-Architecture plan for issues #97 and #98
+Architecture plan for Issue #101: Fix homepage hero typo "Lastest" → "Latest"
 
-Project shape
-- Next.js App Router frontend in src/app with React/TypeScript components in src/components.
-- Public homepage is src/app/(public)/page.tsx and uses Prisma server-side reads for latest posts/subspaces/tags.
-- Header/navigation is src/components/site-header.tsx with session controls delegated to src/components/session-controls.tsx.
-- Styling is Tailwind via src/app/globals.css and existing design tokens/classes.
+Project structure:
+- Next.js App Router frontend lives under src/app with public routes grouped in src/app/(public).
+- Shared UI components live under src/components; global styling is in src/app/globals.css and Tailwind config.
+- Server/database helpers live under src/lib; Prisma schema/migrations are under prisma/.
+- Rust Axum API lives under src-rs and is coordinated with the Next app by scripts/start-coordinated.mjs.
 
-Issue #97: Simplify homepage hero/latest posts
-- Update src/app/(public)/page.tsx only unless tests require small helper adjustments.
-- Preserve public data fetching and post card rendering, but change LATEST_POST_LIMIT from 10 to 20.
-- Replace the current hero copy/buttons with a single h1: "The Lastest Global AI News" exactly as specified, preserving the misspelling.
-- Remove the browse subspaces/tags CTA buttons and their wrapper from the homepage hero.
-- Keep JSON-LD, metadata, latest-posts section behavior, and existing link destinations in post/subspace/tag content.
+Issue dependency plan:
+- Issue #101 is standalone and has no functional dependencies.
+- Scope is limited to homepage display copy. Search the public homepage route and any extracted hero component for the misspelled string "Lastest" and replace only that typo with "Latest".
 
-Issue #98: Active top-nav item
-- Convert src/components/site-header.tsx to a client component with "use client" and usePathname from next/navigation.
-- Keep SessionControls rendered as-is.
-- Add small local helper logic to classify active routes:
-  - Subspaces active on /subspaces and /s/*.
-  - Tags active on /tags and /t/*.
-- Apply filled accent styling to the active link and muted styling to inactive links using existing Tailwind color tokens.
-- Preserve hrefs and accessible nav structure.
-
-Dependencies and sequencing
-- Issue #98 depends on the header remaining present across all pages but does not depend on Issue #97 implementation details.
-- Issue #97 can be completed independently first; Issue #98 can follow without touching homepage internals.
-- Shared risk: header is a server component today; making it client-side should avoid server-only imports in that file. SessionControls is already client-side and safe to compose.
-
-Validation plan
-- Run npm run typecheck and npm test when dependencies are available.
-- For UI changes, verify homepage root, /subspaces, /s/* route matching if data exists, /tags, and /t/* route matching if data exists.
-- Confirm the homepage still renders styled content and the signed-out auth UI remains coherent.
+Key design decisions:
+- Do not alter application architecture, data model, API routes, authentication, storage, or deployment scripts for this text-only change.
+- Keep the existing product branding/copy style intact; only correct the specified typo.
+- Verify with targeted grep plus the normal Next/TypeScript checks as appropriate for a small UI copy change.
