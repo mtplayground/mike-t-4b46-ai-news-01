@@ -397,6 +397,67 @@ impl Database {
         Ok(tag)
     }
 
+    pub async fn create_tag(
+        &self,
+        id: &str,
+        name: &str,
+        slug: &str,
+    ) -> Result<models::Tag, DbError> {
+        let tag = sqlx::query_as::<_, models::Tag>(
+            r#"
+            INSERT INTO tags (id, name, slug, created_at, updated_at)
+            VALUES ($1, $2, $3, NOW(), NOW())
+            RETURNING id, name, slug, created_at, updated_at
+            "#,
+        )
+        .bind(id)
+        .bind(name)
+        .bind(slug)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(tag)
+    }
+
+    pub async fn update_tag(
+        &self,
+        id: &str,
+        name: &str,
+        slug: &str,
+    ) -> Result<Option<models::Tag>, DbError> {
+        let tag = sqlx::query_as::<_, models::Tag>(
+            r#"
+            UPDATE tags
+            SET name = $2,
+                slug = $3,
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING id, name, slug, created_at, updated_at
+            "#,
+        )
+        .bind(id)
+        .bind(name)
+        .bind(slug)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(tag)
+    }
+
+    pub async fn delete_tag(&self, id: &str) -> Result<bool, DbError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM tags
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
     pub async fn post_tags(&self, post_id: &str) -> Result<Vec<models::PostTag>, DbError> {
         let post_tags = sqlx::query_as::<_, models::PostTag>(
             r#"

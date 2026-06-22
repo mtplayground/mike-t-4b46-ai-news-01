@@ -6,6 +6,7 @@ mod db;
 mod models;
 mod state;
 mod subspaces;
+mod tags;
 
 use std::{env, error::Error, net::SocketAddr};
 
@@ -16,6 +17,7 @@ use config::ServerConfig;
 use db::Database;
 use state::AppState;
 use subspaces::router as subspaces_router;
+use tags::router as tags_router;
 use tokio::{net::TcpListener, signal};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::info;
@@ -77,6 +79,7 @@ fn build_router(state: AppState) -> Router {
         .merge(admin_router())
         .merge(auth_router())
         .merge(subspaces_router())
+        .merge(tags_router())
         .route("/health", get(health_check))
         .route("/api/health", get(health_check))
         .layer(TraceLayer::new_for_http())
