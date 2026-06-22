@@ -1,16 +1,23 @@
-Architecture plan for Issue #101: Fix homepage hero typo "Lastest" → "Latest"
+Architecture plan for Issues #103 and #104
 
-Project structure:
-- Next.js App Router frontend lives under src/app with public routes grouped in src/app/(public).
-- Shared UI components live under src/components; global styling is in src/app/globals.css and Tailwind config.
-- Server/database helpers live under src/lib; Prisma schema/migrations are under prisma/.
-- Rust Axum API lives under src-rs and is coordinated with the Next app by scripts/start-coordinated.mjs.
+Project structure and module organization:
+- Next.js App Router frontend lives under `src/app`; the admin page is `src/app/(admin)/admin/page.tsx` and public subspace detail pages are under `src/app/(public)/s/[slug]/page.tsx`.
+- Shared client UI components live under `src/components`. Existing `SubspaceAdminPanel` and `PostEditorPanel` establish the admin form/list pattern; a new `TagAdminPanel` should live beside them in `src/components/tag-admin-panel.tsx`.
+- Shared admin API types and client helpers live in `src/lib/admin-api.ts`. Add tag input/action/delete result types and `createTag`, `updateTag`, and `deleteTag` helpers there so the tag panel follows the existing subspace/post API style.
+- Prisma access for server-rendered public pages already uses `src/lib/db.ts`; issue #104 should keep the subspace post query local to the subspace page unless repeated post-card logic emerges.
+- Rust Axum API modules live in `src-rs`. The tag endpoints already exist in `src-rs/tags.rs`, so issue #103 is primarily frontend wiring rather than backend API work.
 
-Issue dependency plan:
-- Issue #101 is standalone and has no functional dependencies.
-- Scope is limited to homepage display copy. Search the public homepage route and any extracted hero component for the misspelled string "Lastest" and replace only that typo with "Latest".
+Dependencies between issues:
+- Issues #103 and #104 are independent and can be implemented in either order.
+- #103 depends on the existing Axum tag endpoints and the existing admin page's `tags` data fetch.
+- #104 depends on Prisma's existing `Subspace -> Post -> User/Tag` relations and the post detail route `/s/[slug]/[postId]`.
+- There is no shared schema migration required for either issue.
 
 Key design decisions:
-- Do not alter application architecture, data model, API routes, authentication, storage, or deployment scripts for this text-only change.
-- Keep the existing product branding/copy style intact; only correct the specified typo.
-- Verify with targeted grep plus the normal Next/TypeScript checks as appropriate for a small UI copy change.
+- Keep the admin tag UI consistent with `SubspaceAdminPanel`: local optimistic state, selectable existing records, create/edit form, explicit delete confirmation, sorted list, and field-level error display.
+- Reuse `SerializedTag` from `src/lib/admin-api.ts` for the tag panel and post editor; if tag admin mutates tag data, state remains local to the panel for this issue rather than trying to live-update `PostEditorPanel` tag choices across sibling components.
+- Keep tag delete behavior explicit and destructive, relying on backend constraints/cascade behavior already defined for `post_tags`.
+- For #104, extend `getSubspace()` to include posts with author and tags ordered newest-first, then render actual linked post cards. Preserve the empty state only when the query returns zero posts.
+- Remove the subspace Created/Updated metadata cards entirely and simplify the section heading by avoiding the redundant `Posts in {subspace.name}` wording.
+- Use existing title/excerpt/date formatting patterns from the homepage/post detail pages rather than introducing new dependencies.
+- Verification should include TypeScript/lint checks and targeted tests where available; no new platform integrations or environment variables are expected.
