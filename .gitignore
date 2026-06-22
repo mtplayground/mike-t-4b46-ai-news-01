@@ -1,7 +1,6 @@
 target/
 node_modules/
 .gh_token
-.claude/
 .database_url
 .task_id
 .container_name
@@ -11,28 +10,3 @@ node_modules/
 .pipeline-state.json
 .gitkeep
 .progress
-.db_decision
-.storage_decision
-
-# Local environment files
-.env
-.env.local
-.env.*.local
-.env.production
-
-# Next.js build output
-.next/
-out/
-tsconfig.tsbuildinfo
-src/generated/prisma/
-
-# Package manager and tooling caches
-.turbo/
-.vercel/
-coverage/
-playwright-report/
-test-results/
-
-# OS/editor noise
-.DS_Store
-*.swp

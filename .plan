@@ -1,47 +1,33 @@
-# Axum Migration Architecture Plan
+Architecture plan for issues #97 and #98
 
-## Goal
+Project shape
+- Next.js App Router frontend in src/app with React/TypeScript components in src/components.
+- Public homepage is src/app/(public)/page.tsx and uses Prisma server-side reads for latest posts/subspaces/tags.
+- Header/navigation is src/components/site-header.tsx with session controls delegated to src/components/session-controls.tsx.
+- Styling is Tailwind via src/app/globals.css and existing design tokens/classes.
 
-Add a Rust/Axum 0.8 backend beside the existing Next.js AI News app, then migrate auth, content mutation, upload, and admin UI calls from Next server actions/API routes to Axum endpoints while preserving the current PostgreSQL schema and public Next-rendered pages.
+Issue #97: Simplify homepage hero/latest posts
+- Update src/app/(public)/page.tsx only unless tests require small helper adjustments.
+- Preserve public data fetching and post card rendering, but change LATEST_POST_LIMIT from 10 to 20.
+- Replace the current hero copy/buttons with a single h1: "The Lastest Global AI News" exactly as specified, preserving the misspelling.
+- Remove the browse subspaces/tags CTA buttons and their wrapper from the homepage hero.
+- Keep JSON-LD, metadata, latest-posts section behavior, and existing link destinations in post/subspace/tag content.
 
-## Module Structure
+Issue #98: Active top-nav item
+- Convert src/components/site-header.tsx to a client component with "use client" and usePathname from next/navigation.
+- Keep SessionControls rendered as-is.
+- Add small local helper logic to classify active routes:
+  - Subspaces active on /subspaces and /s/*.
+  - Tags active on /tags and /t/*.
+- Apply filled accent styling to the active link and muted styling to inactive links using existing Tailwind color tokens.
+- Preserve hrefs and accessible nav structure.
 
-- `Cargo.toml`: workspace/package definition for the Rust API service.
-- `src-rs/main.rs`: binary entrypoint, config load, tracing, router construction, TCP bind.
-- `src-rs/config.rs`: environment parsing/validation matching `scripts/validate-env.mjs` (`DATABASE_URL`, `ADMIN_PASSWORD`, `MCTAI_AUTH_*`, `OBJECT_STORAGE_*`, `SELF_URL`).
-- `src-rs/db.rs`: `sqlx::PgPool` construction and shared DB state.
-- `src-rs/models.rs`: typed Rust structs/enums for existing tables (`users`, `accounts`, `sessions`, `subspaces`, `posts`, `tags`, `post_tags`, `user_role`). Prisma migrations remain authoritative; Rust does not own schema changes.
-- `src-rs/auth/`: myClawTeam JWKS verification, claim-to-user sync, admin password/session logic, cookie helpers, and Axum extractors.
-- `src-rs/authorization.rs`: reusable admin/authenticated/author-or-admin guards.
-- `src-rs/slugs.rs`: slug normalization/validation shared by subspace/tag handlers.
-- `src-rs/routes/`: route modules for health, admin auth, myClawTeam auth, subspaces, tags, posts, uploads, and `/api/files` compatibility 404.
-- `src-rs/storage.rs`: S3-compatible client wrapper that always prepends `OBJECT_STORAGE_PREFIX`, buffers upload bodies, sends explicit content length, and returns presigned URLs.
-- `src-rs/errors.rs`: common API error type, JSON error responses, and full server-side error logging.
-- `src-rs/tests/` or module tests: unit coverage for auth, authorization, slug, and validation behavior.
-- Existing `src/` Next app: keep public pages and React admin components; later rewire admin components to `fetch` Axum endpoints and remove superseded server actions/Next API routes after parity.
+Dependencies and sequencing
+- Issue #98 depends on the header remaining present across all pages but does not depend on Issue #97 implementation details.
+- Issue #97 can be completed independently first; Issue #98 can follow without touching homepage internals.
+- Shared risk: header is a server component today; making it client-side should avoid server-only imports in that file. SessionControls is already client-side and safe to compose.
 
-## Issue Dependency Flow
-
-1. #67 creates the Rust server skeleton and health/router baseline.
-2. #68 adds config validation; all later backend work depends on it.
-3. #69 adds sqlx/PostgreSQL access to the existing schema.
-4. #70 coordinates local/deployed process layout so Next remains public on `:8080` and Axum is reached through a documented proxy/path.
-5. #71 and #72 implement the two auth/session sources: myClawTeam JWT sessions and admin password sessions.
-6. #73 exposes myClawTeam auth login/logout/session endpoints.
-7. #74 centralizes authorization rules for later mutations.
-8. #75-#77 add subspace, tag, and post mutation APIs.
-9. #78 adds authenticated media upload and presigned-read handling.
-10. #79 rewires the admin UI and upload form to Axum `fetch` calls, then removes superseded Next API/server-action code.
-11. #80 ports unit tests to the Rust API logic.
-12. #81 updates Playwright to exercise the Axum-backed admin flow.
-
-## Key Design Decisions
-
-- Keep PostgreSQL as the only persistent store; do not introduce SQLite, JSON files, or in-memory state.
-- Keep Prisma migrations as the source of truth for schema; Rust uses sqlx against the existing tables only.
-- Preserve auth semantics: `mctai_session` is verified with remote JWKS, `admin_session` is DB-backed, and no app-issued JWT layer is added.
-- Preserve authorization semantics: admin-only subspace/tag management; authenticated post creation; author-or-admin post edits/deletes.
-- Preserve object-storage safety: all object keys are relative keys under `OBJECT_STORAGE_PREFIX`; uploads are private and exposed with presigned GET URLs.
-- Use JSON API responses with consistent status codes and field-error shapes compatible with the existing admin UI state model.
-- When running behind the myClawTeam proxy, derive public origin from `SELF_URL`/forwarded headers for redirects and never rely on the raw internal `Host` header.
-- Keep public SEO pages in Next for now; Axum owns mutation/auth/upload API paths after the rewire.
+Validation plan
+- Run npm run typecheck and npm test when dependencies are available.
+- For UI changes, verify homepage root, /subspaces, /s/* route matching if data exists, /tags, and /t/* route matching if data exists.
+- Confirm the homepage still renders styled content and the signed-out auth UI remains coherent.
