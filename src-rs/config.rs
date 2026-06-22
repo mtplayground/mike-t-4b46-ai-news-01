@@ -419,3 +419,83 @@ fn is_placeholder_value(value: &str) -> bool {
         || lower.starts_with("replace-with-")
         || lower.starts_with("postgresql://user:password@host")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_missing_bot_api_token() {
+        let mut values = valid_values();
+        values.remove("AI_NEWS_BOT_API_TOKEN");
+
+        let error = ServerConfig::from_values(&values).unwrap_err();
+
+        assert!(matches!(
+            error,
+            ConfigError::MissingEnv(name) if name == "AI_NEWS_BOT_API_TOKEN"
+        ));
+    }
+
+    #[test]
+    fn rejects_short_bot_api_token() {
+        let mut values = valid_values();
+        values.insert("AI_NEWS_BOT_API_TOKEN".to_owned(), "too-short".to_owned());
+
+        let error = ServerConfig::from_values(&values).unwrap_err();
+
+        assert!(matches!(error, ConfigError::ShortBotApiToken));
+    }
+
+    fn valid_values() -> HashMap<String, String> {
+        HashMap::from([
+            ("ADMIN_PASSWORD".to_owned(), "valid-admin-password".to_owned()),
+            (
+                "AI_NEWS_BOT_API_TOKEN".to_owned(),
+                "valid-bot-token-000000000000000000".to_owned(),
+            ),
+            (
+                "DATABASE_URL".to_owned(),
+                "postgresql://user:password@example.com/app".to_owned(),
+            ),
+            (
+                "MCTAI_AUTH_APP_TOKEN".to_owned(),
+                "test-auth-app-token".to_owned(),
+            ),
+            (
+                "MCTAI_AUTH_JWKS_URL".to_owned(),
+                "https://auth.example.test/.well-known/jwks.json".to_owned(),
+            ),
+            (
+                "MCTAI_AUTH_URL".to_owned(),
+                "https://auth.example.test".to_owned(),
+            ),
+            (
+                "OBJECT_STORAGE_ACCESS_KEY_ID".to_owned(),
+                "test-access-key".to_owned(),
+            ),
+            (
+                "OBJECT_STORAGE_BUCKET".to_owned(),
+                "test-bucket".to_owned(),
+            ),
+            (
+                "OBJECT_STORAGE_ENDPOINT".to_owned(),
+                "https://storage.example.test".to_owned(),
+            ),
+            (
+                "OBJECT_STORAGE_FORCE_PATH_STYLE".to_owned(),
+                "true".to_owned(),
+            ),
+            (
+                "OBJECT_STORAGE_PREFIX".to_owned(),
+                "test-prefix/".to_owned(),
+            ),
+            ("OBJECT_STORAGE_REGION".to_owned(), "auto".to_owned()),
+            (
+                "OBJECT_STORAGE_SECRET_ACCESS_KEY".to_owned(),
+                "test-secret-key".to_owned(),
+            ),
+            ("SELF_URL".to_owned(), "https://app.example.test".to_owned()),
+        ])
+    }
+}

@@ -69,6 +69,11 @@ impl Database {
         &self.pool
     }
 
+    #[cfg(test)]
+    pub fn from_pool(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
     pub async fn ping(&self) -> Result<(), DbError> {
         sqlx::query("SELECT 1").execute(&self.pool).await?;
         Ok(())
