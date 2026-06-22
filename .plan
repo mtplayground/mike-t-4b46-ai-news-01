@@ -1,31 +1,35 @@
-Architecture plan for Issues #107-#109
+Architecture plan for Issue #113
 
 Module structure and file organization
-- Keep the existing split: Next.js app for pages/admin UI and Axum in src-rs for API endpoints.
-- Issue #107 changes shared configuration:
-  - src-rs/config.rs: add AI_NEWS_BOT_API_TOKEN to REQUIRED_ENV, ServerConfig, from_values, and introduce a ShortBotApiToken/validation path requiring at least 32 characters. Avoid including the token in Display/log output.
-  - src-rs/state.rs: add ai_news_bot_api_token: String to AppState so route handlers can verify requests without re-reading env.
-  - src-rs/main.rs: pass config.ai_news_bot_api_token into AppState.
-  - scripts/validate-env.mjs: add the variable to requiredEnv and validateBotApiToken() near validateAdminPassword().
-  - src/lib/env.ts: add AI_NEWS_BOT_API_TOKEN to the server env type/required env list for consistency with existing validation conventions.
-- Issue #108 adds a new Rust module:
-  - src-rs/bot_posts.rs exports router() -> Router<AppState> and is merged in src-rs/main.rs.
-  - Endpoint: POST /api/bot/posts.
-  - Request body type: { bodyMarkdown, subspaceSlug, tagSlugs? } with serde camelCase.
-  - Response can reuse the public post serialization shape from posts.rs conceptually; if current structs are private, either make shared serialization helpers public or duplicate a small private serializer in bot_posts.rs to minimize churn.
-- Database access stays in src-rs/db.rs using existing methods where possible: ensure_admin_user(), subspace_by_slug(), tag_by_slug(), create_post_with_tags(). No schema migration is needed.
-- Issue #109 adds Rust tests around bot_posts/config validation plus README endpoint/env documentation.
+- Keep the existing server-rendered admin page at `src/app/(admin)/admin/page.tsx` responsible for fetching posts, subspaces, and tags from Prisma and serializing those records for client components.
+- Add a focused client component at `src/components/admin-content-tabs.tsx`.
+  - This component will own only tab UI state and accessibility attributes.
+  - It will receive the same data currently passed directly to `PostEditorPanel`, `SubspaceAdminPanel`, and `TagAdminPanel`.
+  - It will render the three existing panels without changing their internal state, API helpers, or backend endpoints.
+- Update `src/app/(admin)/admin/page.tsx` to import `AdminContentTabs` and replace the three stacked management `<section>` blocks with one tabbed content area.
+- No database, Prisma schema, Rust API, auth, storage, or public page changes are needed.
 
-Dependencies between issues
-- #107 is foundational: the endpoint needs the token in ServerConfig/AppState, and tests/docs rely on validation behavior.
-- #108 depends on #107: the router verifies Authorization: Bearer <token> from AppState and creates posts as the fixed admin user.
-- #109 depends on #107 and #108: tests assert token validation, endpoint auth/status codes, param validation, attribution, and docs describe the final contract.
+Shared types
+- Reuse existing exported admin API types from `src/lib/admin-api.ts`:
+  - `SerializedPost`
+  - `SerializedSubspace`
+  - `SerializedTag`
+- The new component props should keep these exact types to avoid duplicating data contracts.
+
+Dependencies
+- This issue depends on the existing `PostEditorPanel`, `SubspaceAdminPanel`, and `TagAdminPanel` components already being present and functional.
+- There are no cross-issue dependencies in this batch and no migration requirements.
 
 Key design decisions
-- Use Authorization: Bearer <token>; never accept the token in query strings or request JSON.
-- Compare tokens with subtle::ConstantTimeEq and never log raw Authorization or token values.
-- Attribute bot-created posts to the existing admin user by calling ensure_admin_user() and using admin:password; ignore any author-like fields in the request body.
-- Accept external-friendly slugs, not database IDs: subspaceSlug is required, tagSlugs is optional. Unknown subspace/tag slugs return 404 rather than auto-creating records.
-- Validate carefully: trim strings, require non-empty bodyMarkdown and subspaceSlug, cap bodyMarkdown at 100,000 chars, dedupe tagSlugs, cap tags consistently with normal posts (24), and return 400 for bad params.
-- Keep persistence in PostgreSQL only; use existing post/tag/subspace tables and transaction-backed create_post_with_tags().
-- Keep the endpoint independent of browser/admin cookies and myClawTeam session auth; it is for a server-to-server AI news bot only.
+- Default active tab is `Posts` so the existing admin post creation flow remains visible by default and current E2E assumptions continue to hold.
+- Use semantic ARIA tabs:
+  - container with `role="tablist"`
+  - each tab button with `role="tab"`, `aria-selected`, `aria-controls`, and stable IDs
+  - each panel with `role="tabpanel"`, `aria-labelledby`, and hidden state for inactive panels
+- Keep all panels mounted only as needed by the active tab unless tests reveal state preservation is required. If preserving in-progress edits between tabs matters, keep all panels mounted and hide inactive panels with `hidden`.
+- Preserve existing panel labels and visual styling by wrapping each panel in the same bordered panel style currently used on the admin page.
+- Do not alter authentication behavior; `/admin` stays protected by the existing admin/session flow.
+
+Verification plan
+- Run TypeScript checks after implementation.
+- Run or update the relevant admin E2E flow if available, ensuring the Posts tab is active by default and Subspaces/Tags tabs can be selected.
