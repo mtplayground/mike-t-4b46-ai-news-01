@@ -5,6 +5,7 @@ import type {
   SerializedTag,
 } from "@/lib/admin-api";
 import { SubspaceAdminPanel } from "@/components/subspace-admin-panel";
+import { TagAdminPanel } from "@/components/tag-admin-panel";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -131,6 +132,13 @@ export default async function AdminPage() {
         className="rounded-lg border border-border bg-panel p-5"
       >
         <SubspaceAdminPanel initialSubspaces={subspaces} />
+      </section>
+
+      <section
+        aria-label="Tag management"
+        className="rounded-lg border border-border bg-panel p-5"
+      >
+        <TagAdminPanel initialTags={tags} />
       </section>
 
       <section

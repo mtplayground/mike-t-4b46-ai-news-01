@@ -74,6 +74,35 @@ export type DeleteSubspaceActionResult =
       ok: false;
     };
 
+export type TagInput = {
+  name: string;
+  slug: string;
+};
+
+type TagField = "id" | "name" | "slug";
+
+export type TagActionResult =
+  | {
+      ok: true;
+      tag: SerializedTag;
+    }
+  | {
+      error: string;
+      fieldErrors?: Partial<Record<TagField, string>>;
+      ok: false;
+    };
+
+export type DeleteTagActionResult =
+  | {
+      id: string;
+      ok: true;
+    }
+  | {
+      error: string;
+      fieldErrors?: Partial<Record<TagField, string>>;
+      ok: false;
+    };
+
 export type PostInput = {
   bodyMarkdown: string;
   subspaceId: string;
@@ -224,6 +253,41 @@ export function deleteSubspace(
       method: "DELETE",
     },
     "Subspace mutation failed.",
+  );
+}
+
+export function createTag(input: TagInput): Promise<TagActionResult> {
+  return fetchJson<{ tag: SerializedTag }, TagField>(
+    "/api/tags",
+    {
+      body: JSON.stringify(input),
+      method: "POST",
+    },
+    "Tag mutation failed.",
+  );
+}
+
+export function updateTag(
+  id: string,
+  input: TagInput,
+): Promise<TagActionResult> {
+  return fetchJson<{ tag: SerializedTag }, TagField>(
+    `/api/tags/${encodeURIComponent(id)}`,
+    {
+      body: JSON.stringify(input),
+      method: "PATCH",
+    },
+    "Tag mutation failed.",
+  );
+}
+
+export function deleteTag(id: string): Promise<DeleteTagActionResult> {
+  return fetchJson<{ id: string }, TagField>(
+    `/api/tags/${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+    },
+    "Tag mutation failed.",
   );
 }
 
