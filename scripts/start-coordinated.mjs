@@ -14,20 +14,27 @@ const AXUM_HOST = process.env.AXUM_HOST ?? "127.0.0.1";
 const AXUM_PORT = Number.parseInt(process.env.AXUM_PORT ?? "8081", 10);
 const MAX_BUFFERED_API_BODY_BYTES = 110 * 1024 * 1024;
 const AXUM_BINARY = resolveAxumBinary();
+const AXUM_MODE = process.env.AXUM_MODE ?? "binary";
+const NEXT_MODE = process.env.NEXT_MODE ?? "start";
 
 validatePort("PORT", PUBLIC_PORT);
 validatePort("NEXT_PORT", NEXT_PORT);
 validatePort("AXUM_PORT", AXUM_PORT);
 
 const children = [
-  spawnManaged("axum-api", AXUM_BINARY, [], {
-    ...process.env,
-    HOST: AXUM_HOST,
-    PORT: String(AXUM_PORT),
-  }),
+  spawnManaged(
+    "axum-api",
+    AXUM_MODE === "cargo" ? "cargo" : AXUM_BINARY,
+    AXUM_MODE === "cargo" ? ["run", "--bin", "mike-t-4b46-ai-news-01-api"] : [],
+    {
+      ...process.env,
+      HOST: AXUM_HOST,
+      PORT: String(AXUM_PORT),
+    },
+  ),
   spawnManaged("next", process.execPath, [
     "node_modules/next/dist/bin/next",
-    "start",
+    NEXT_MODE === "dev" ? "dev" : "start",
     "-H",
     NEXT_HOST,
     "-p",
@@ -57,7 +64,7 @@ server.on("clientError", (error, socket) => {
 
 server.listen(PUBLIC_PORT, PUBLIC_HOST, () => {
   console.log(
-    `[gateway] listening on ${PUBLIC_HOST}:${PUBLIC_PORT}; /api/* -> Axum ${AXUM_HOST}:${AXUM_PORT} with 404 fallback to Next ${NEXT_HOST}:${NEXT_PORT}; pages/assets -> Next`,
+    `[gateway] listening on ${PUBLIC_HOST}:${PUBLIC_PORT}; /api/* -> Axum ${AXUM_HOST}:${AXUM_PORT} with 404 fallback to Next ${NEXT_HOST}:${NEXT_PORT}; pages/assets -> Next (${NEXT_MODE})`,
   );
 });
 
