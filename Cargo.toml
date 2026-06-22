@@ -9,10 +9,11 @@ name = "mike-t-4b46-ai-news-01-api"
 path = "src-rs/main.rs"
 
 [dependencies]
-axum = "0.8"
+axum = { version = "0.8", features = ["multipart"] }
 chrono = { version = "=0.4.38", default-features = false, features = ["clock", "serde"] }
 getrandom = "=0.3.4"
 hex = "=0.4.3"
+hmac = "=0.12.1"
 httpdate = "=1.0.3"
 jsonwebtoken = { version = "=9.3.1", default-features = false, features = ["use_pem"] }
 reqwest = { version = "=0.12.12", default-features = false, features = ["json", "rustls-tls"] }
@@ -27,3 +28,4 @@ url = "=2.5.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 unicode-normalization = "=0.1.24"
+uuid = { version = "1", features = ["v4"] }

@@ -6,8 +6,10 @@ mod db;
 mod models;
 mod posts;
 mod state;
+mod storage;
 mod subspaces;
 mod tags;
+mod uploads;
 
 use std::{env, error::Error, net::SocketAddr};
 
@@ -18,12 +20,14 @@ use config::ServerConfig;
 use db::Database;
 use posts::router as posts_router;
 use state::AppState;
+use storage::StorageService;
 use subspaces::router as subspaces_router;
 use tags::router as tags_router;
 use tokio::{net::TcpListener, signal};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use uploads::router as uploads_router;
 
 const DEFAULT_HOST: &str = "0.0.0.0";
 const DEFAULT_PORT: u16 = 8080;
@@ -48,10 +52,12 @@ async fn main() -> AppResult<()> {
         database.clone(),
         secure_cookies,
     );
+    let storage = StorageService::new(config.object_storage.clone())?;
     let state = AppState {
         admin,
         auth,
         database,
+        storage,
     };
     let addr = listen_addr()?;
     let app = build_router(state);
@@ -83,6 +89,7 @@ fn build_router(state: AppState) -> Router {
         .merge(posts_router())
         .merge(subspaces_router())
         .merge(tags_router())
+        .merge(uploads_router())
         .route("/health", get(health_check))
         .route("/api/health", get(health_check))
         .layer(TraceLayer::new_for_http())
