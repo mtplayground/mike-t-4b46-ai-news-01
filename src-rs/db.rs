@@ -73,6 +73,36 @@ impl Database {
         Ok(user)
     }
 
+    pub async fn sync_user_from_claims(
+        &self,
+        claims: &crate::auth::MctaiSessionClaims,
+    ) -> Result<models::User, DbError> {
+        let user = sqlx::query_as::<_, models::User>(
+            r#"
+            INSERT INTO users (sub, email, email_verified, name, picture_url, last_seen_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+            ON CONFLICT (sub) DO UPDATE SET
+                email = EXCLUDED.email,
+                email_verified = EXCLUDED.email_verified,
+                name = EXCLUDED.name,
+                picture_url = EXCLUDED.picture_url,
+                last_seen_at = NOW(),
+                updated_at = NOW()
+            RETURNING sub, email, email_verified, name, picture_url, role,
+                      created_at, updated_at, last_seen_at
+            "#,
+        )
+        .bind(&claims.sub)
+        .bind(&claims.email)
+        .bind(claims.email_verified)
+        .bind(&claims.name)
+        .bind(&claims.picture)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(user)
+    }
+
     pub async fn session_by_token(
         &self,
         session_token: &str,
