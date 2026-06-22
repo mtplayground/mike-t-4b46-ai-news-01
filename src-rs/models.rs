@@ -91,3 +91,12 @@ pub struct PostTag {
     pub tag_id: String,
     pub created_at: DateTime<Utc>,
 }
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct PostWithRelations {
+    pub author: User,
+    pub post: Post,
+    pub subspace: Subspace,
+    pub tags: Vec<Tag>,
+}
