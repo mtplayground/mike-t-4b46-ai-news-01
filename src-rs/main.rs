@@ -1,6 +1,9 @@
+mod config;
+
 use std::{env, error::Error, net::SocketAddr};
 
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
+use config::ServerConfig;
 use tokio::{net::TcpListener, signal};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::info;
@@ -15,11 +18,12 @@ type AppResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 async fn main() -> AppResult<()> {
     init_tracing();
 
+    let config = ServerConfig::load()?;
     let addr = listen_addr()?;
     let app = build_router();
     let listener = TcpListener::bind(addr).await?;
 
-    info!(%addr, "starting Axum API server");
+    info!(%addr, self_url = %config.self_url, "starting Axum API server");
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
