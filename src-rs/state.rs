@@ -1,4 +1,4 @@
-use crate::{admin::AdminAuth, auth::AuthVerifier, db::Database};
+use crate::{admin::AdminAuth, auth::AuthVerifier, db::Database, storage::StorageService};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -7,4 +7,5 @@ pub struct AppState {
     pub auth: AuthVerifier,
     #[allow(dead_code)]
     pub database: Database,
+    pub storage: StorageService,
 }
