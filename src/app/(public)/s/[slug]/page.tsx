@@ -12,6 +12,50 @@ type SubspaceDetailPageProps = {
   }>;
 };
 
+function cleanMarkdownLine(line: string): string {
+  return line
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[*_`>~]/g, "")
+    .trim();
+}
+
+function getPostTitle(bodyMarkdown: string): string {
+  const firstLine = bodyMarkdown
+    .split("\n")
+    .map(cleanMarkdownLine)
+    .find((line) => line.length > 0);
+
+  if (!firstLine) {
+    return "Untitled post";
+  }
+
+  return firstLine.length > 96 ? `${firstLine.slice(0, 93)}...` : firstLine;
+}
+
+function getPostExcerpt(bodyMarkdown: string): string {
+  const text = bodyMarkdown
+    .split("\n")
+    .map(cleanMarkdownLine)
+    .filter((line) => line.length > 0)
+    .join(" ");
+
+  if (!text) {
+    return "No preview text is available for this post.";
+  }
+
+  return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+}
+
+function formatDate(value: Date): string {
+  return value.toLocaleDateString("en", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 async function getSubspace(slug: string) {
   return prisma.subspace.findUnique({
     where: {
@@ -24,6 +68,29 @@ async function getSubspace(slug: string) {
       name: true,
       slug: true,
       updatedAt: true,
+      posts: {
+        include: {
+          author: {
+            select: {
+              email: true,
+              name: true,
+            },
+          },
+          tags: {
+            include: {
+              tag: true,
+            },
+            orderBy: {
+              tag: {
+                name: "asc",
+              },
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
     },
   });
 }
@@ -67,8 +134,8 @@ export default async function SubspaceDetailPage({
         <Link
           className="text-sm font-bold text-accent-strong no-underline"
           href="/subspaces"
-        
-                      prefetch={false}>
+          prefetch={false}
+        >
           Back to subspaces
         </Link>
       </nav>
@@ -91,32 +158,6 @@ export default async function SubspaceDetailPage({
         )}
       </header>
 
-      <section
-        aria-label="Subspace details"
-        className="grid grid-cols-1 gap-4 md:grid-cols-2"
-      >
-        <article className="rounded-lg border border-border bg-panel p-5">
-          <h2 className="mb-2.5 mt-0 text-lg">Created</h2>
-          <p className="m-0 text-sm leading-6 text-muted">
-            {subspace.createdAt.toLocaleDateString("en", {
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
-          </p>
-        </article>
-        <article className="rounded-lg border border-border bg-panel p-5">
-          <h2 className="mb-2.5 mt-0 text-lg">Updated</h2>
-          <p className="m-0 text-sm leading-6 text-muted">
-            {subspace.updatedAt.toLocaleDateString("en", {
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
-          </p>
-        </article>
-      </section>
-
       <section className="grid gap-4" aria-labelledby="subspace-posts-title">
         <div className="flex items-end justify-between gap-4">
           <div className="grid gap-1">
@@ -124,15 +165,67 @@ export default async function SubspaceDetailPage({
               Posts
             </p>
             <h2 id="subspace-posts-title" className="m-0 text-2xl">
-              Posts in {subspace.name}
+              {subspace.name}
             </h2>
           </div>
         </div>
-        <div className="rounded-lg border border-border bg-panel p-5">
-          <p className="m-0 text-sm leading-6 text-muted">
-            No posts have been published in this subspace yet.
-          </p>
-        </div>
+        {subspace.posts.length > 0 ? (
+          <div className="grid gap-3">
+            {subspace.posts.map((post) => (
+              <article
+                className="grid gap-3 rounded-lg border border-border bg-panel p-5"
+                key={post.id}
+              >
+                <div className="grid gap-1">
+                  <h3 className="m-0 text-xl">
+                    <Link
+                      className="text-foreground no-underline hover:text-accent-strong"
+                      href={`/s/${subspace.slug}/${post.id}`}
+                      prefetch={false}
+                    >
+                      {getPostTitle(post.bodyMarkdown)}
+                    </Link>
+                  </h3>
+                </div>
+                <p className="m-0 text-sm leading-6 text-muted">
+                  {getPostExcerpt(post.bodyMarkdown)}
+                </p>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                  <span>
+                    By{" "}
+                    <span className="font-bold text-foreground">
+                      {post.author.name || post.author.email}
+                    </span>
+                  </span>
+                  <span aria-hidden="true">.</span>
+                  <time dateTime={post.createdAt.toISOString()}>
+                    {formatDate(post.createdAt)}
+                  </time>
+                </div>
+                {post.tags.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {post.tags.map(({ tag }) => (
+                      <Link
+                        className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-bold text-accent-strong no-underline"
+                        href={`/t/${tag.slug}`}
+                        key={tag.id}
+                        prefetch={false}
+                      >
+                        #{tag.name}
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border bg-panel p-5">
+            <p className="m-0 text-sm leading-6 text-muted">
+              No posts have been published in this subspace yet.
+            </p>
+          </div>
+        )}
       </section>
     </main>
   );
