@@ -7,7 +7,6 @@ import {
   serializeJsonLd,
   SITE_DESCRIPTION,
   SITE_NAME,
-  SITE_SLOGAN,
 } from "@/lib/page-metadata";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +18,7 @@ export const metadata: Metadata = buildPageMetadata({
   title: SITE_NAME,
 });
 
-const LATEST_POST_LIMIT = 10;
+const LATEST_POST_LIMIT = 20;
 
 function cleanMarkdownLine(line: string): string {
   return line
@@ -137,46 +136,12 @@ export default async function HomePage() {
         type="application/ld+json"
       />
       <header className="grid gap-5">
-        <p className="m-0 text-sm font-bold uppercase text-accent-strong">
-          {SITE_NAME}
-        </p>
         <h1 className="m-0 max-w-3xl text-4xl leading-tight sm:text-6xl">
-          {SITE_SLOGAN}
+          The Lastest Global AI News
         </h1>
-        <p className="m-0 max-w-2xl text-base leading-7 text-muted">
-          Browse every topic space and read the newest posts from across the
-          site.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-white no-underline"
-            href="/subspaces"
-          
-                      prefetch={false}>
-            Browse subspaces
-          </Link>
-          <Link
-            className="rounded-md border border-border bg-panel px-4 py-2 text-sm font-bold text-foreground no-underline"
-            href="/tags"
-          
-                      prefetch={false}>
-            Browse tags
-          </Link>
-        </div>
       </header>
 
-      <section className="grid gap-4" aria-labelledby="latest-posts-title">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="grid gap-1">
-            <p className="m-0 text-sm font-bold uppercase text-accent-strong">
-              Latest
-            </p>
-            <h2 id="latest-posts-title" className="m-0 text-2xl">
-              Latest posts
-            </h2>
-          </div>
-        </div>
-
+      <section className="grid gap-4" aria-label="Latest news">
         {latestPosts.length > 0 ? (
           <div className="grid gap-3">
             {latestPosts.map((post) => (
@@ -192,8 +157,8 @@ export default async function HomePage() {
                     <Link
                       className="text-foreground no-underline hover:text-accent-strong"
                       href={`/s/${post.subspace.slug}/${post.id}`}
-                    
-                      prefetch={false}>
+                      prefetch={false}
+                    >
                       {getPostTitle(post.bodyMarkdown)}
                     </Link>
                   </h3>
@@ -220,8 +185,8 @@ export default async function HomePage() {
                         className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-bold text-accent-strong no-underline"
                         href={`/t/${tag.slug}`}
                         key={tag.id}
-                      
-                      prefetch={false}>
+                        prefetch={false}
+                      >
                         #{tag.name}
                       </Link>
                     ))}
@@ -242,9 +207,6 @@ export default async function HomePage() {
       <section className="grid gap-4" aria-labelledby="subspaces-title">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="grid gap-1">
-            <p className="m-0 text-sm font-bold uppercase text-accent-strong">
-              Directory
-            </p>
             <h2 id="subspaces-title" className="m-0 text-2xl">
               Subspaces
             </h2>
@@ -252,8 +214,8 @@ export default async function HomePage() {
           <Link
             className="text-sm font-bold text-accent-strong no-underline"
             href="/subspaces"
-          
-                      prefetch={false}>
+            prefetch={false}
+          >
             View all
           </Link>
         </div>
@@ -270,8 +232,8 @@ export default async function HomePage() {
                     <Link
                       className="text-foreground no-underline hover:text-accent-strong"
                       href={`/s/${subspace.slug}`}
-                    
-                      prefetch={false}>
+                      prefetch={false}
+                    >
                       {subspace.name}
                     </Link>
                   </h3>
