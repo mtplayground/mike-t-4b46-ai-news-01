@@ -131,6 +131,15 @@ impl AdminAuth {
         }))
     }
 
+    pub async fn authenticate_cookie_header(
+        &self,
+        cookie_header: Option<&str>,
+    ) -> Result<Option<PersistedAdminSession>, AdminAuthError> {
+        let token = cookie_header.and_then(admin_session_token_from_cookie_header);
+
+        self.get_session(token.as_deref()).await
+    }
+
     pub async fn delete_session(&self, token: Option<&str>) -> Result<(), AdminAuthError> {
         if let Some(token) = token {
             self.database

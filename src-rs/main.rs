@@ -1,5 +1,6 @@
 mod admin;
 mod auth;
+mod authorization;
 mod config;
 mod db;
 mod models;
