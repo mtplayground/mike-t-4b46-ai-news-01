@@ -41,6 +41,13 @@ impl DbError {
             Self::Sqlx(sqlx::Error::Database(error)) if error.code().as_deref() == Some("23505")
         )
     }
+
+    pub fn is_foreign_key_violation(&self) -> bool {
+        matches!(
+            self,
+            Self::Sqlx(sqlx::Error::Database(error)) if error.code().as_deref() == Some("23503")
+        )
+    }
 }
 
 #[derive(Clone)]
@@ -301,6 +308,21 @@ impl Database {
         Ok(subspace)
     }
 
+    pub async fn subspace_by_id(&self, id: &str) -> Result<Option<models::Subspace>, DbError> {
+        let subspace = sqlx::query_as::<_, models::Subspace>(
+            r#"
+            SELECT id, name, slug, description, created_at, updated_at
+            FROM subspaces
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(subspace)
+    }
+
     pub async fn create_subspace(
         &self,
         id: &str,
@@ -382,6 +404,222 @@ impl Database {
         Ok(post)
     }
 
+    pub async fn post_author_sub(&self, id: &str) -> Result<Option<String>, DbError> {
+        let author_sub = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT author_sub
+            FROM posts
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(author_sub)
+    }
+
+    pub async fn post_with_relations(
+        &self,
+        id: &str,
+    ) -> Result<Option<models::PostWithRelations>, DbError> {
+        let row = sqlx::query(
+            r#"
+            SELECT
+                p.id AS post_id,
+                p.body_markdown,
+                p.author_sub,
+                p.subspace_id,
+                p.created_at AS post_created_at,
+                p.updated_at AS post_updated_at,
+                u.sub AS user_sub,
+                u.email,
+                u.email_verified,
+                u.name AS user_name,
+                u.picture_url,
+                u.role,
+                u.created_at AS user_created_at,
+                u.updated_at AS user_updated_at,
+                u.last_seen_at,
+                s.id AS subspace_row_id,
+                s.name AS subspace_name,
+                s.slug AS subspace_slug,
+                s.description AS subspace_description,
+                s.created_at AS subspace_created_at,
+                s.updated_at AS subspace_updated_at
+            FROM posts p
+            INNER JOIN users u ON u.sub = p.author_sub
+            INNER JOIN subspaces s ON s.id = p.subspace_id
+            WHERE p.id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        let tags = sqlx::query_as::<_, models::Tag>(
+            r#"
+            SELECT t.id, t.name, t.slug, t.created_at, t.updated_at
+            FROM post_tags pt
+            INNER JOIN tags t ON t.id = pt.tag_id
+            WHERE pt.post_id = $1
+            ORDER BY t.name ASC
+            "#,
+        )
+        .bind(id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(Some(models::PostWithRelations {
+            post: models::Post {
+                id: row.try_get("post_id")?,
+                body_markdown: row.try_get("body_markdown")?,
+                author_sub: row.try_get("author_sub")?,
+                subspace_id: row.try_get("subspace_id")?,
+                created_at: row.try_get("post_created_at")?,
+                updated_at: row.try_get("post_updated_at")?,
+            },
+            author: models::User {
+                sub: row.try_get("user_sub")?,
+                email: row.try_get("email")?,
+                email_verified: row.try_get("email_verified")?,
+                name: row.try_get("user_name")?,
+                picture_url: row.try_get("picture_url")?,
+                role: row.try_get("role")?,
+                created_at: row.try_get("user_created_at")?,
+                updated_at: row.try_get("user_updated_at")?,
+                last_seen_at: row.try_get("last_seen_at")?,
+            },
+            subspace: models::Subspace {
+                id: row.try_get("subspace_row_id")?,
+                name: row.try_get("subspace_name")?,
+                slug: row.try_get("subspace_slug")?,
+                description: row.try_get("subspace_description")?,
+                created_at: row.try_get("subspace_created_at")?,
+                updated_at: row.try_get("subspace_updated_at")?,
+            },
+            tags,
+        }))
+    }
+
+    pub async fn create_post_with_tags(
+        &self,
+        id: &str,
+        author_sub: &str,
+        body_markdown: &str,
+        subspace_id: &str,
+        tag_ids: &[String],
+    ) -> Result<models::PostWithRelations, DbError> {
+        let mut transaction = self.pool.begin().await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO posts (id, body_markdown, author_sub, subspace_id, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, NOW(), NOW())
+            "#,
+        )
+        .bind(id)
+        .bind(body_markdown)
+        .bind(author_sub)
+        .bind(subspace_id)
+        .execute(&mut *transaction)
+        .await?;
+
+        for tag_id in tag_ids {
+            sqlx::query(
+                r#"
+                INSERT INTO post_tags (post_id, tag_id, created_at)
+                VALUES ($1, $2, NOW())
+                "#,
+            )
+            .bind(id)
+            .bind(tag_id)
+            .execute(&mut *transaction)
+            .await?;
+        }
+
+        transaction.commit().await?;
+
+        self.post_with_relations(id)
+            .await?
+            .ok_or_else(|| DbError::from(sqlx::Error::RowNotFound))
+    }
+
+    pub async fn update_post_with_tags(
+        &self,
+        id: &str,
+        body_markdown: &str,
+        subspace_id: &str,
+        tag_ids: &[String],
+    ) -> Result<Option<models::PostWithRelations>, DbError> {
+        let mut transaction = self.pool.begin().await?;
+
+        let result = sqlx::query(
+            r#"
+            UPDATE posts
+            SET body_markdown = $2,
+                subspace_id = $3,
+                updated_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .bind(body_markdown)
+        .bind(subspace_id)
+        .execute(&mut *transaction)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            transaction.rollback().await?;
+            return Ok(None);
+        }
+
+        sqlx::query(
+            r#"
+            DELETE FROM post_tags
+            WHERE post_id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&mut *transaction)
+        .await?;
+
+        for tag_id in tag_ids {
+            sqlx::query(
+                r#"
+                INSERT INTO post_tags (post_id, tag_id, created_at)
+                VALUES ($1, $2, NOW())
+                "#,
+            )
+            .bind(id)
+            .bind(tag_id)
+            .execute(&mut *transaction)
+            .await?;
+        }
+
+        transaction.commit().await?;
+
+        self.post_with_relations(id).await
+    }
+
+    pub async fn delete_post(&self, id: &str) -> Result<bool, DbError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM posts
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
     pub async fn tag_by_slug(&self, slug: &str) -> Result<Option<models::Tag>, DbError> {
         let tag = sqlx::query_as::<_, models::Tag>(
             r#"
@@ -391,6 +629,21 @@ impl Database {
             "#,
         )
         .bind(slug)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(tag)
+    }
+
+    pub async fn tag_by_id(&self, id: &str) -> Result<Option<models::Tag>, DbError> {
+        let tag = sqlx::query_as::<_, models::Tag>(
+            r#"
+            SELECT id, name, slug, created_at, updated_at
+            FROM tags
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
         .fetch_optional(&self.pool)
         .await?;
 

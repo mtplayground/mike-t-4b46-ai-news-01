@@ -4,6 +4,7 @@ mod authorization;
 mod config;
 mod db;
 mod models;
+mod posts;
 mod state;
 mod subspaces;
 mod tags;
@@ -15,6 +16,7 @@ use auth::{router as auth_router, AuthVerifier};
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use config::ServerConfig;
 use db::Database;
+use posts::router as posts_router;
 use state::AppState;
 use subspaces::router as subspaces_router;
 use tags::router as tags_router;
@@ -78,6 +80,7 @@ fn build_router(state: AppState) -> Router {
     Router::new()
         .merge(admin_router())
         .merge(auth_router())
+        .merge(posts_router())
         .merge(subspaces_router())
         .merge(tags_router())
         .route("/health", get(health_check))
