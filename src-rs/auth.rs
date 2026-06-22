@@ -478,9 +478,145 @@ fn session_token_from_cookie_header(cookie_header: Option<&str>) -> Option<Strin
         let (name, value) = part.trim().split_once('=')?;
 
         if name == MCTAI_SESSION_COOKIE && !value.is_empty() {
-            Some(value.to_owned())
+            Some(decode_cookie_value(value))
         } else {
             None
         }
     })
+}
+
+fn decode_cookie_value(value: &str) -> String {
+    url::form_urlencoded::parse(format!("cookie={value}").as_bytes())
+        .next()
+        .map(|(_, decoded)| decoded.into_owned())
+        .unwrap_or_else(|| value.to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::{AuthConfig, ObjectStorageConfig, ServerConfig},
+        db::Database,
+    };
+
+    fn test_database() -> Database {
+        let config = ServerConfig {
+            admin_password: "test-admin-password".to_owned(),
+            auth: AuthConfig {
+                app_token: "app-token".to_owned(),
+                jwks_url: "https://auth.example.test/.well-known/jwks.json".to_owned(),
+                url: "https://auth.example.test".to_owned(),
+            },
+            database_url: "postgres://user:password@localhost:5432/app".to_owned(),
+            object_storage: ObjectStorageConfig {
+                access_key_id: "access-key".to_owned(),
+                bucket: "bucket".to_owned(),
+                endpoint: "https://fly.storage.tigris.dev".to_owned(),
+                force_path_style: true,
+                prefix: "app_mike_t_4b46_ai_news_01_a92a65/".to_owned(),
+                region: "auto".to_owned(),
+                secret_access_key: "secret".to_owned(),
+            },
+            self_url: "https://app.example.test".to_owned(),
+        };
+
+        Database::connect(&config).expect("test database config should create a lazy pool")
+    }
+
+    fn verifier() -> AuthVerifier {
+        AuthVerifier::new(
+            AuthConfig {
+                app_token: "app-token".to_owned(),
+                jwks_url: "https://auth.example.test/.well-known/jwks.json".to_owned(),
+                url: "https://auth.example.test".to_owned(),
+            },
+            test_database(),
+            "https://app.example.test".to_owned(),
+            true,
+        )
+    }
+
+    fn claims(overrides: impl FnOnce(&mut MctaiSessionClaims)) -> MctaiSessionClaims {
+        let mut claims = MctaiSessionClaims {
+            aud: serde_json::json!("app-token"),
+            email: "user@example.test".to_owned(),
+            email_verified: true,
+            exp: 4_102_444_800,
+            iat: Some(1_700_000_000),
+            iss: "https://auth.example.test".to_owned(),
+            name: Some("User".to_owned()),
+            picture: None,
+            sub: "user-1".to_owned(),
+        };
+        overrides(&mut claims);
+        claims
+    }
+
+    #[test]
+    fn extracts_and_decodes_user_session_cookies() {
+        let cookie_header = "theme=dark; mctai_session=token%20with%20spaces; ignored=value";
+
+        assert_eq!(
+            session_token_from_cookie_header(Some(cookie_header)),
+            Some("token with spaces".to_owned())
+        );
+        assert_eq!(session_token_from_cookie_header(Some("theme=dark")), None);
+        assert_eq!(session_token_from_cookie_header(None), None);
+    }
+
+    #[test]
+    fn validates_required_session_claims() {
+        assert!(validate_claims(&claims(|_| {})).is_ok());
+        assert!(matches!(
+            validate_claims(&claims(|claims| claims.sub = "   ".to_owned())),
+            Err(AuthError::InvalidClaims("sub is required"))
+        ));
+        assert!(matches!(
+            validate_claims(&claims(|claims| claims.email = "   ".to_owned())),
+            Err(AuthError::InvalidClaims("email is required"))
+        ));
+        assert!(matches!(
+            validate_claims(&claims(|claims| claims.iss = "   ".to_owned())),
+            Err(AuthError::InvalidClaims("iss is required"))
+        ));
+    }
+
+    #[tokio::test]
+    async fn builds_login_url_with_safe_frontend_return_target() {
+        let verifier = verifier();
+        let url = verifier
+            .login_url(Some("/profile?tab=settings"))
+            .expect("login url should be built");
+
+        assert_eq!(url.as_str(), "https://auth.example.test/login?app_token=app-token&return_to=https%3A%2F%2Fapp.example.test%2Fprofile%3Ftab%3Dsettings");
+    }
+
+    #[tokio::test]
+    async fn rejects_api_or_cross_origin_return_targets() {
+        let verifier = verifier();
+
+        let api_url = verifier
+            .login_url(Some("/api/auth/session"))
+            .expect("login url should be built");
+        assert!(api_url
+            .as_str()
+            .contains("return_to=https%3A%2F%2Fapp.example.test%2F"));
+
+        let external_url = verifier
+            .login_url(Some("https://evil.example.test/admin"))
+            .expect("login url should be built");
+        assert!(external_url
+            .as_str()
+            .contains("return_to=https%3A%2F%2Fapp.example.test%2F"));
+    }
+
+    #[tokio::test]
+    async fn formats_logout_cookie_security_attributes() {
+        let verifier = verifier();
+        let cookie = verifier.clear_cookie();
+
+        assert!(cookie.starts_with("mctai_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0;"));
+        assert!(cookie.ends_with("; Secure"));
+    }
 }
