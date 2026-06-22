@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 8080",
+    "dev:coordinated": "AXUM_MODE=cargo NEXT_MODE=dev node scripts/start-coordinated.mjs",
     "build": "prisma generate && next build && npm run build:api",
     "start": "npm run validate:env && node scripts/start-coordinated.mjs",
     "typecheck": "prisma generate && tsc --noEmit",
