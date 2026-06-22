@@ -137,7 +137,7 @@ export default async function HomePage() {
       />
       <header className="grid gap-5">
         <h1 className="m-0 max-w-3xl text-4xl leading-tight sm:text-6xl">
-          The Lastest Global AI News
+          The Latest Global AI News
         </h1>
       </header>
 
