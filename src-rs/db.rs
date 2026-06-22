@@ -1,6 +1,7 @@
 use std::{error::Error, fmt};
 
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use chrono::{DateTime, Utc};
+use sqlx::{postgres::PgPoolOptions, PgPool, Row};
 
 use crate::{config::ServerConfig, models};
 
@@ -54,6 +55,139 @@ impl Database {
 
     pub async fn ping(&self) -> Result<(), DbError> {
         sqlx::query("SELECT 1").execute(&self.pool).await?;
+        Ok(())
+    }
+
+    pub async fn ensure_admin_user(&self) -> Result<models::User, DbError> {
+        let user = sqlx::query_as::<_, models::User>(
+            r#"
+            INSERT INTO users (sub, email, email_verified, name, role, last_seen_at, updated_at)
+            VALUES ('admin:password', 'admin@admin.local', true, 'Admin', 'admin'::user_role, NOW(), NOW())
+            ON CONFLICT (sub) DO UPDATE SET
+                email_verified = true,
+                last_seen_at = NOW(),
+                name = 'Admin',
+                role = 'admin'::user_role,
+                updated_at = NOW()
+            RETURNING sub, email, email_verified, name, picture_url, role,
+                      created_at, updated_at, last_seen_at
+            "#,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(user)
+    }
+
+    pub async fn delete_expired_admin_sessions(&self) -> Result<(), DbError> {
+        sqlx::query(
+            r#"
+            DELETE FROM sessions
+            WHERE user_sub = 'admin:password' AND expires <= NOW()
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn create_admin_session(
+        &self,
+        session_token_hash: &str,
+        user_sub: &str,
+        expires: DateTime<Utc>,
+    ) -> Result<models::Session, DbError> {
+        let id = format!("admin-session:{}", session_token_hash);
+        let session = sqlx::query_as::<_, models::Session>(
+            r#"
+            INSERT INTO sessions (id, session_token, user_sub, expires, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, NOW(), NOW())
+            RETURNING id, session_token, user_sub, expires, created_at, updated_at
+            "#,
+        )
+        .bind(id)
+        .bind(session_token_hash)
+        .bind(user_sub)
+        .bind(expires)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(session)
+    }
+
+    pub async fn admin_session_by_hash(
+        &self,
+        session_token_hash: &str,
+    ) -> Result<Option<(models::Session, models::User)>, DbError> {
+        let row = sqlx::query(
+            r#"
+            SELECT
+                s.id AS session_id,
+                s.session_token,
+                s.user_sub,
+                s.expires,
+                s.created_at AS session_created_at,
+                s.updated_at AS session_updated_at,
+                u.sub,
+                u.email,
+                u.email_verified,
+                u.name,
+                u.picture_url,
+                u.role,
+                u.created_at AS user_created_at,
+                u.updated_at AS user_updated_at,
+                u.last_seen_at
+            FROM sessions s
+            INNER JOIN users u ON u.sub = s.user_sub
+            WHERE s.session_token = $1
+            "#,
+        )
+        .bind(session_token_hash)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        let session = models::Session {
+            id: row.try_get("session_id")?,
+            session_token: row.try_get("session_token")?,
+            user_sub: row.try_get("user_sub")?,
+            expires: row.try_get("expires")?,
+            created_at: row.try_get("session_created_at")?,
+            updated_at: row.try_get("session_updated_at")?,
+        };
+        let user = models::User {
+            sub: row.try_get("sub")?,
+            email: row.try_get("email")?,
+            email_verified: row.try_get("email_verified")?,
+            name: row.try_get("name")?,
+            picture_url: row.try_get("picture_url")?,
+            role: row.try_get("role")?,
+            created_at: row.try_get("user_created_at")?,
+            updated_at: row.try_get("user_updated_at")?,
+            last_seen_at: row.try_get("last_seen_at")?,
+        };
+
+        Ok(Some((session, user)))
+    }
+
+    pub async fn delete_admin_session_by_hash(
+        &self,
+        session_token_hash: &str,
+    ) -> Result<(), DbError> {
+        sqlx::query(
+            r#"
+            DELETE FROM sessions
+            WHERE session_token = $1 AND user_sub = 'admin:password'
+            "#,
+        )
+        .bind(session_token_hash)
+        .execute(&self.pool)
+        .await?;
+
         Ok(())
     }
 
