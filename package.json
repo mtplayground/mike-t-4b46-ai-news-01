@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 8080",
-    "build": "prisma generate && next build",
-    "start": "npm run validate:env && next start -H 0.0.0.0 -p 8080",
+    "build": "prisma generate && next build && npm run build:api",
+    "start": "npm run validate:env && node scripts/start-coordinated.mjs",
     "typecheck": "prisma generate && tsc --noEmit",
     "lint": "eslint .",
     "test": "prisma generate && vitest run",
@@ -16,7 +16,10 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "validate:env": "node scripts/validate-env.mjs"
+    "validate:env": "node scripts/validate-env.mjs",
+    "build:api": "cargo build --release",
+    "start:next": "next start -H ${NEXT_HOST:-127.0.0.1} -p ${NEXT_PORT:-3000}",
+    "start:api": "HOST=${AXUM_HOST:-127.0.0.1} PORT=${AXUM_PORT:-8081} ./target/release/mike-t-4b46-ai-news-01-api"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1066.0",

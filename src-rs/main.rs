@@ -22,8 +22,7 @@ async fn main() -> AppResult<()> {
     init_tracing();
 
     let config = ServerConfig::load()?;
-    let database = Database::connect(&config).await?;
-    database.ping().await?;
+    let database = Database::connect(&config)?;
     let addr = listen_addr()?;
     let app = build_router(database);
     let listener = TcpListener::bind(addr).await?;
