@@ -55,6 +55,7 @@ async fn main() -> AppResult<()> {
     let storage = StorageService::new(config.object_storage.clone())?;
     let state = AppState {
         admin,
+        ai_news_bot_api_token: config.ai_news_bot_api_token.clone(),
         auth,
         database,
         storage,

@@ -4,6 +4,8 @@ use crate::{admin::AdminAuth, auth::AuthVerifier, db::Database, storage::Storage
 pub struct AppState {
     pub admin: AdminAuth,
     #[allow(dead_code)]
+    pub ai_news_bot_api_token: String,
+    #[allow(dead_code)]
     pub auth: AuthVerifier,
     #[allow(dead_code)]
     pub database: Database,

@@ -1,5 +1,6 @@
 type RequiredEnvName =
   | "ADMIN_PASSWORD"
+  | "AI_NEWS_BOT_API_TOKEN"
   | "DATABASE_URL"
   | "MCTAI_AUTH_APP_TOKEN"
   | "MCTAI_AUTH_JWKS_URL"
@@ -31,6 +32,7 @@ export type ObjectStorageEnv = {
 
 export type ServerEnv = {
   adminPassword: string;
+  aiNewsBotApiToken: string;
   auth: AuthEnv;
   databaseUrl: string;
   objectStorage: ObjectStorageEnv;
@@ -77,6 +79,18 @@ export function getAdminPassword(): string {
   return requireEnv("ADMIN_PASSWORD");
 }
 
+export function getAiNewsBotApiToken(): string {
+  const token = requireEnv("AI_NEWS_BOT_API_TOKEN");
+
+  if (token.length < 32) {
+    throw new Error(
+      "Environment variable AI_NEWS_BOT_API_TOKEN must be at least 32 characters",
+    );
+  }
+
+  return token;
+}
+
 export function getObjectStorageEnv(): ObjectStorageEnv {
   const prefix = requireEnv("OBJECT_STORAGE_PREFIX");
 
@@ -104,6 +118,7 @@ export function getSelfUrl(): string {
 export function getServerEnv(): ServerEnv {
   return {
     adminPassword: getAdminPassword(),
+    aiNewsBotApiToken: getAiNewsBotApiToken(),
     auth: getAuthEnv(),
     databaseUrl: getDatabaseUrl(),
     objectStorage: getObjectStorageEnv(),
