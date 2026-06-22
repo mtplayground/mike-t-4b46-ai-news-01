@@ -348,11 +348,18 @@ fn admin_session_token_from_cookie_header(cookie_header: &str) -> Option<String>
         let (name, value) = part.trim().split_once('=')?;
 
         if name == ADMIN_SESSION_COOKIE && !value.is_empty() {
-            Some(value.to_owned())
+            Some(decode_cookie_value(value))
         } else {
             None
         }
     })
+}
+
+fn decode_cookie_value(value: &str) -> String {
+    url::form_urlencoded::parse(format!("cookie={value}").as_bytes())
+        .next()
+        .map(|(_, decoded)| decoded.into_owned())
+        .unwrap_or_else(|| value.to_owned())
 }
 
 fn format_cookie(value: &str, max_age_seconds: i64, secure: bool) -> String {
@@ -386,4 +393,73 @@ fn sha256_bytes(value: &[u8]) -> [u8; 32] {
     let mut bytes = [0_u8; 32];
     bytes.copy_from_slice(&digest);
     bytes
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        config::{AuthConfig, ObjectStorageConfig, ServerConfig},
+        db::Database,
+    };
+
+    use super::*;
+
+    fn test_database() -> Database {
+        let config = ServerConfig {
+            admin_password: "test-admin-password".to_owned(),
+            auth: AuthConfig {
+                app_token: "app-token".to_owned(),
+                jwks_url: "https://auth.example.test/.well-known/jwks.json".to_owned(),
+                url: "https://auth.example.test".to_owned(),
+            },
+            database_url: "postgres://user:password@localhost:5432/app".to_owned(),
+            object_storage: ObjectStorageConfig {
+                access_key_id: "access-key".to_owned(),
+                bucket: "bucket".to_owned(),
+                endpoint: "https://fly.storage.tigris.dev".to_owned(),
+                force_path_style: true,
+                prefix: "app_mike_t_4b46_ai_news_01_a92a65/".to_owned(),
+                region: "auto".to_owned(),
+                secret_access_key: "secret".to_owned(),
+            },
+            self_url: "https://app.example.test".to_owned(),
+        };
+
+        Database::connect(&config).expect("test database config should create a lazy pool")
+    }
+
+    #[test]
+    fn extracts_and_decodes_admin_session_cookies() {
+        let cookie_header = "admin_session=admin%2Ftoken; mctai_session=user-token";
+
+        assert_eq!(
+            admin_session_token_from_cookie_header(cookie_header),
+            Some("admin/token".to_owned())
+        );
+        assert_eq!(admin_session_token_from_cookie_header("not-a-cookie"), None);
+        assert_eq!(
+            admin_session_token_from_cookie_header("admin_session="),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn verifies_admin_passwords_without_accepting_blank_values() {
+        let auth = AdminAuth::new("test-admin-password".to_owned(), test_database(), false);
+
+        assert!(!auth.verify_password(""));
+        assert!(!auth.verify_password("wrong-password"));
+        assert!(auth.verify_password("test-admin-password"));
+    }
+
+    #[tokio::test]
+    async fn formats_session_cookie_security_attributes() {
+        let auth = AdminAuth::new("test-admin-password".to_owned(), test_database(), true);
+        let expires = Utc::now() + Duration::minutes(5);
+        let cookie = auth.session_cookie("token", expires);
+
+        assert!(cookie.starts_with("admin_session=token; Path=/; HttpOnly; SameSite=Lax;"));
+        assert!(cookie.contains("Max-Age="));
+        assert!(cookie.ends_with("; Secure"));
+    }
 }
