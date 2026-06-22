@@ -1,3 +1,4 @@
+mod admin;
 mod auth;
 mod config;
 mod db;
@@ -6,6 +7,7 @@ mod state;
 
 use std::{env, error::Error, net::SocketAddr};
 
+use admin::{router as admin_router, AdminAuth};
 use auth::AuthVerifier;
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use config::ServerConfig;
@@ -28,7 +30,16 @@ async fn main() -> AppResult<()> {
     let config = ServerConfig::load()?;
     let database = Database::connect(&config)?;
     let auth = AuthVerifier::new(config.auth.clone(), database.clone());
-    let state = AppState { auth, database };
+    let admin = AdminAuth::new(
+        config.admin_password.clone(),
+        database.clone(),
+        env::var("NODE_ENV").is_ok_and(|value| value == "production"),
+    );
+    let state = AppState {
+        admin,
+        auth,
+        database,
+    };
     let addr = listen_addr()?;
     let app = build_router(state);
     let listener = TcpListener::bind(addr).await?;
@@ -54,6 +65,7 @@ fn init_tracing() {
 
 fn build_router(state: AppState) -> Router {
     Router::new()
+        .merge(admin_router())
         .route("/health", get(health_check))
         .route("/api/health", get(health_check))
         .layer(TraceLayer::new_for_http())
