@@ -1,15 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-
-type UploadResponse = {
-  contentType: string;
-  objectKey: string;
-  relativeKey: string;
-  size: number;
-  uploadedBy: string;
-  url: string;
-};
+import { type UploadResponse, uploadMediaFile } from "@/lib/admin-api";
 
 type MarkdownMediaUploaderProps = {
   defaultValue?: string;
@@ -43,35 +35,6 @@ function markdownForUpload(file: File, upload: UploadResponse): string {
   }
 
   return `[${label}](${upload.url})`;
-}
-
-async function uploadFile(file: File): Promise<UploadResponse> {
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const response = await fetch("/api/uploads", {
-    body: formData,
-    credentials: "same-origin",
-    method: "POST",
-  });
-  const payload = (await response.json().catch(() => null)) as
-    | { error?: string }
-    | UploadResponse
-    | null;
-
-  if (!response.ok) {
-    const message =
-      payload && "error" in payload && payload.error
-        ? payload.error
-        : "Upload failed";
-    throw new Error(message);
-  }
-
-  if (!payload || !("url" in payload)) {
-    throw new Error("Upload response was invalid");
-  }
-
-  return payload;
 }
 
 export function MarkdownMediaUploader({
@@ -171,7 +134,7 @@ export function MarkdownMediaUploader({
     setIsUploading(true);
 
     try {
-      const upload = await uploadFile(selectedFile);
+      const upload = await uploadMediaFile(selectedFile);
       setLastUpload(upload);
       insertAtCursor(markdownForUpload(selectedFile, upload));
       setSelectedFile(null);

@@ -2,14 +2,14 @@
 
 import { useMemo, useState, useTransition } from "react";
 import {
-  createPostAction,
-  deletePostAction,
+  createPost,
+  deletePost,
   type PostActionResult,
   type SerializedPost,
-  updatePostAction,
-} from "@/app/actions/posts";
-import type { SerializedSubspace } from "@/app/actions/subspaces";
-import type { SerializedTag } from "@/app/actions/tags";
+  type SerializedSubspace,
+  type SerializedTag,
+  updatePost,
+} from "@/lib/admin-api";
 import { MarkdownMediaUploader } from "@/components/markdown-media-uploader";
 
 type FieldErrors = NonNullable<
@@ -158,8 +158,8 @@ export function PostEditorPanel({
 
     startTransition(async () => {
       const result = selectedPost
-        ? await updatePostAction(selectedPost.id, input)
-        : await createPostAction(input);
+        ? await updatePost(selectedPost.id, input)
+        : await createPost(input);
 
       if (!result.ok) {
         setFieldErrors(result.fieldErrors ?? {});
@@ -189,7 +189,7 @@ export function PostEditorPanel({
     setMessage(null);
 
     startTransition(async () => {
-      const result = await deletePostAction(deleteCandidate.id);
+      const result = await deletePost(deleteCandidate.id);
 
       if (!result.ok) {
         setFieldErrors(result.fieldErrors ?? {});
