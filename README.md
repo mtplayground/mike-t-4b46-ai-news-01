@@ -18,24 +18,25 @@ Copy `.env.example` to your deployment environment and replace every placeholder
 
 Required variables:
 
-| Variable                           | Purpose                                                    |
-| ---------------------------------- | ---------------------------------------------------------- |
-| `DATABASE_URL`                     | PostgreSQL connection string used by Prisma.               |
-| `SELF_URL`                         | Public origin for canonical URLs and auth return targets.  |
-| `PORT`                             | Public coordinated gateway port. Use `8080` in production. |
-| `NEXT_PORT`                        | Internal Next.js port. Defaults to `3000`.                 |
-| `AXUM_PORT`                        | Internal Axum API port. Defaults to `8081`.                |
-| `MCTAI_AUTH_URL`                   | myClawTeam auth service origin.                            |
-| `MCTAI_AUTH_APP_TOKEN`             | App token registered with myClawTeam auth.                 |
-| `MCTAI_AUTH_JWKS_URL`              | JWKS endpoint used to verify `mctai_session`.              |
-| `ADMIN_PASSWORD`                   | Fixed admin login password for content management.         |
-| `OBJECT_STORAGE_ACCESS_KEY_ID`     | Object storage access key.                                 |
-| `OBJECT_STORAGE_SECRET_ACCESS_KEY` | Object storage secret key.                                 |
-| `OBJECT_STORAGE_BUCKET`            | Private bucket name.                                       |
-| `OBJECT_STORAGE_PREFIX`            | Required object-key prefix. Must end with `/`.             |
-| `OBJECT_STORAGE_ENDPOINT`          | S3-compatible endpoint URL.                                |
-| `OBJECT_STORAGE_REGION`            | Storage region. Use `auto` for Tigris.                     |
-| `OBJECT_STORAGE_FORCE_PATH_STYLE`  | `true` or `false`; use `true` for Tigris.                  |
+| Variable                           | Purpose                                                                             |
+| ---------------------------------- | ----------------------------------------------------------------------------------- |
+| `DATABASE_URL`                     | PostgreSQL connection string used by Prisma.                                        |
+| `SELF_URL`                         | Public origin for canonical URLs and auth return targets.                           |
+| `PORT`                             | Public coordinated gateway port. Use `8080` in production.                          |
+| `NEXT_PORT`                        | Internal Next.js port. Defaults to `3000`.                                          |
+| `AXUM_PORT`                        | Internal Axum API port. Defaults to `8081`.                                         |
+| `MCTAI_AUTH_URL`                   | myClawTeam auth service origin.                                                     |
+| `MCTAI_AUTH_APP_TOKEN`             | App token registered with myClawTeam auth.                                          |
+| `MCTAI_AUTH_JWKS_URL`              | JWKS endpoint used to verify `mctai_session`.                                       |
+| `ADMIN_PASSWORD`                   | Fixed admin login password for content management.                                  |
+| `AI_NEWS_BOT_API_TOKEN`            | Bearer token for the external AI news bot post API. Must be at least 32 characters. |
+| `OBJECT_STORAGE_ACCESS_KEY_ID`     | Object storage access key.                                                          |
+| `OBJECT_STORAGE_SECRET_ACCESS_KEY` | Object storage secret key.                                                          |
+| `OBJECT_STORAGE_BUCKET`            | Private bucket name.                                                                |
+| `OBJECT_STORAGE_PREFIX`            | Required object-key prefix. Must end with `/`.                                      |
+| `OBJECT_STORAGE_ENDPOINT`          | S3-compatible endpoint URL.                                                         |
+| `OBJECT_STORAGE_REGION`            | Storage region. Use `auto` for Tigris.                                              |
+| `OBJECT_STORAGE_FORCE_PATH_STYLE`  | `true` or `false`; use `true` for Tigris.                                           |
 
 The app intentionally uses the vendor-neutral `OBJECT_STORAGE_*` names. The storage code prepends `OBJECT_STORAGE_PREFIX` to every S3 `PutObject` and `GetObject` key and returns presigned read URLs for private media.
 
@@ -55,7 +56,38 @@ By default this reads `.env.production` if it exists, then falls back to already
 node scripts/validate-env.mjs .env.staging
 ```
 
-The validator fails on missing values, placeholder values, invalid URLs, non-PostgreSQL database URLs, invalid boolean values, object storage prefixes without a trailing slash, fabricated storage endpoints, short admin passwords, and direct Google OAuth secret variables.
+The validator fails on missing values, placeholder values, invalid URLs, non-PostgreSQL database URLs, invalid boolean values, object storage prefixes without a trailing slash, fabricated storage endpoints, short admin passwords, short AI news bot API tokens, and direct Google OAuth secret variables.
+
+## External AI News Bot API
+
+External AI news ingestion uses the Axum endpoint:
+
+```http
+POST /api/bot/posts
+Authorization: Bearer <AI_NEWS_BOT_API_TOKEN>
+Content-Type: application/json
+```
+
+Request body:
+
+```json
+{
+  "bodyMarkdown": "# Headline\n\nArticle content in Markdown.",
+  "subspaceSlug": "ai-news",
+  "tagSlugs": ["openai", "llm"]
+}
+```
+
+Contract:
+
+- `bodyMarkdown` is required, trimmed, and limited to 100,000 characters.
+- `subspaceSlug` is required and must match an existing subspace slug.
+- `tagSlugs` is optional; values are trimmed, deduplicated, capped at 24, and each must match an existing tag slug.
+- The token is accepted only from the `Authorization: Bearer ...` header; do not send it in query strings or JSON.
+- Caller-supplied author fields are ignored. Bot-created posts are attributed to the fixed admin author.
+- The JSON request body limit is approximately 128 KiB.
+
+Responses use JSON. Success returns `201 Created` with `{ "ok": true, "post": ... }`. Missing or invalid tokens return `401`; invalid parameters return `400`; unknown subspace or tag slugs return `404`; oversized bodies return `413`; unexpected failures return `500`.
 
 ## Production Topology
 

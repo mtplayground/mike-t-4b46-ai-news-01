@@ -182,7 +182,10 @@ async fn create_bot_post_inner(
         .map_err(BotPostError::from)
 }
 
-async fn resolve_tag_ids(database: &Database, tag_slugs: &[String]) -> Result<Vec<String>, BotPostError> {
+async fn resolve_tag_ids(
+    database: &Database,
+    tag_slugs: &[String],
+) -> Result<Vec<String>, BotPostError> {
     let mut tag_ids = Vec::with_capacity(tag_slugs.len());
 
     for tag_slug in tag_slugs {
@@ -221,7 +224,10 @@ fn verify_bot_token(headers: &HeaderMap, expected_token: &str) -> Result<(), Bot
 
 fn bearer_token(headers: &HeaderMap) -> Option<&str> {
     let value = headers.get(header::AUTHORIZATION)?.to_str().ok()?;
-    value.strip_prefix("Bearer ").map(str::trim).filter(|token| !token.is_empty())
+    value
+        .strip_prefix("Bearer ")
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
 }
 
 fn validate_bot_post_input(input: BotPostInput) -> Result<ValidatedBotPostInput, BotPostError> {
@@ -438,4 +444,325 @@ fn bot_post_error_response(
         }),
     )
         .into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::{to_bytes, Body},
+        http::Request,
+    };
+    use serde_json::{json, Value};
+    use sqlx::PgPool;
+    use tower::ServiceExt;
+
+    use crate::{
+        admin::AdminAuth,
+        auth::AuthVerifier,
+        config::{AuthConfig, ObjectStorageConfig},
+        storage::StorageService,
+    };
+
+    const BOT_TOKEN: &str = "test-bot-token-00000000000000000000";
+
+    #[sqlx::test(migrations = false)]
+    async fn valid_token_creates_admin_attributed_post_and_ignores_author_spoof(
+        pool: PgPool,
+    ) -> sqlx::Result<()> {
+        let state = test_state(pool).await?;
+        state
+            .database
+            .create_subspace(
+                "subspace:bot-test",
+                "Bot Test",
+                "bot-test",
+                "Subspace for bot tests",
+            )
+            .await
+            .expect("create subspace");
+        state
+            .database
+            .create_tag("tag:ai", "AI", "ai")
+            .await
+            .expect("create tag");
+
+        let response = post_bot_article(
+            state.clone(),
+            Some(BOT_TOKEN),
+            json!({
+                "bodyMarkdown": "  # Bot article  ",
+                "subspaceSlug": "bot-test",
+                "tagSlugs": ["ai", "ai", "  ai  "],
+                "authorSub": "attacker:user"
+            }),
+        )
+        .await;
+
+        assert_eq!(response.status, StatusCode::CREATED);
+        assert_eq!(response.body["ok"], true);
+        assert_eq!(response.body["post"]["authorSub"], ADMIN_AUTHOR_SUB);
+        assert_eq!(response.body["post"]["author"]["sub"], ADMIN_AUTHOR_SUB);
+        assert_eq!(response.body["post"]["bodyMarkdown"], "# Bot article");
+        assert_eq!(response.body["post"]["tags"].as_array().unwrap().len(), 1);
+
+        let stored_author_sub: String = sqlx::query_scalar("SELECT author_sub FROM posts LIMIT 1")
+            .fetch_one(state.database.pool())
+            .await?;
+        assert_eq!(stored_author_sub, ADMIN_AUTHOR_SUB);
+
+        Ok(())
+    }
+
+    #[sqlx::test(migrations = false)]
+    async fn missing_and_invalid_tokens_return_unauthorized(pool: PgPool) -> sqlx::Result<()> {
+        let state = test_state(pool).await?;
+
+        let missing = post_bot_article(
+            state.clone(),
+            None,
+            json!({"bodyMarkdown": "News", "subspaceSlug": "bot-test"}),
+        )
+        .await;
+        assert_eq!(missing.status, StatusCode::UNAUTHORIZED);
+
+        let invalid = post_bot_article(
+            state,
+            Some("wrong-token"),
+            json!({"bodyMarkdown": "News", "subspaceSlug": "bot-test"}),
+        )
+        .await;
+        assert_eq!(invalid.status, StatusCode::UNAUTHORIZED);
+
+        Ok(())
+    }
+
+    #[sqlx::test(migrations = false)]
+    async fn unknown_subspace_or_tag_slug_returns_not_found(pool: PgPool) -> sqlx::Result<()> {
+        let state = test_state(pool).await?;
+        state
+            .database
+            .create_subspace(
+                "subspace:bot-test",
+                "Bot Test",
+                "bot-test",
+                "Subspace for bot tests",
+            )
+            .await
+            .expect("create subspace");
+
+        let unknown_subspace = post_bot_article(
+            state.clone(),
+            Some(BOT_TOKEN),
+            json!({"bodyMarkdown": "News", "subspaceSlug": "missing"}),
+        )
+        .await;
+        assert_eq!(unknown_subspace.status, StatusCode::NOT_FOUND);
+        assert_eq!(
+            unknown_subspace.body["fieldErrors"]["subspaceSlug"],
+            "Subspace was not found."
+        );
+
+        let unknown_tag = post_bot_article(
+            state,
+            Some(BOT_TOKEN),
+            json!({
+                "bodyMarkdown": "News",
+                "subspaceSlug": "bot-test",
+                "tagSlugs": ["missing-tag"]
+            }),
+        )
+        .await;
+        assert_eq!(unknown_tag.status, StatusCode::NOT_FOUND);
+        assert_eq!(
+            unknown_tag.body["fieldErrors"]["tagSlugs"],
+            "One or more tag slugs were not found."
+        );
+
+        Ok(())
+    }
+
+    #[sqlx::test(migrations = false)]
+    async fn invalid_parameters_return_bad_request(pool: PgPool) -> sqlx::Result<()> {
+        let state = test_state(pool).await?;
+        let too_many_tags = (0..=MAX_TAGS_PER_POST)
+            .map(|index| format!("tag-{index}"))
+            .collect::<Vec<_>>();
+
+        let response = post_bot_article(
+            state,
+            Some(BOT_TOKEN),
+            json!({
+                "bodyMarkdown": "   ",
+                "subspaceSlug": "   ",
+                "tagSlugs": too_many_tags
+            }),
+        )
+        .await;
+
+        assert_eq!(response.status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            response.body["fieldErrors"]["bodyMarkdown"],
+            "Post body is required."
+        );
+        assert_eq!(
+            response.body["fieldErrors"]["subspaceSlug"],
+            "Subspace slug is required."
+        );
+        assert_eq!(
+            response.body["fieldErrors"]["tagSlugs"],
+            "Posts can have at most 24 tags."
+        );
+
+        Ok(())
+    }
+
+    async fn test_state(pool: PgPool) -> sqlx::Result<AppState> {
+        prepare_database(&pool).await?;
+        let database = Database::from_pool(pool);
+        let admin = AdminAuth::new(
+            "test-admin-password-000000".to_owned(),
+            database.clone(),
+            false,
+        );
+        let auth = AuthVerifier::new(
+            AuthConfig {
+                app_token: "test-app-token".to_owned(),
+                jwks_url: "https://auth.example.test/.well-known/jwks.json".to_owned(),
+                url: "https://auth.example.test".to_owned(),
+            },
+            database.clone(),
+            "https://app.example.test".to_owned(),
+            false,
+        );
+        let storage = StorageService::new(ObjectStorageConfig {
+            access_key_id: "test-access-key".to_owned(),
+            bucket: "test-bucket".to_owned(),
+            endpoint: "https://storage.example.test".to_owned(),
+            force_path_style: true,
+            prefix: "tests/".to_owned(),
+            region: "auto".to_owned(),
+            secret_access_key: "test-secret-key".to_owned(),
+        })
+        .expect("test storage config is valid");
+
+        Ok(AppState {
+            admin,
+            ai_news_bot_api_token: BOT_TOKEN.to_owned(),
+            auth,
+            database,
+            storage,
+        })
+    }
+
+    async fn prepare_database(pool: &PgPool) -> sqlx::Result<()> {
+        sqlx::query("CREATE TYPE user_role AS ENUM ('user', 'admin')")
+            .execute(pool)
+            .await?;
+        sqlx::query(
+            r#"
+            CREATE TABLE users (
+                sub TEXT PRIMARY KEY,
+                email TEXT NOT NULL UNIQUE,
+                email_verified BOOLEAN NOT NULL DEFAULT false,
+                name TEXT,
+                picture_url TEXT,
+                role user_role NOT NULL DEFAULT 'user',
+                created_at TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query(
+            r#"
+            CREATE TABLE subspaces (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                slug TEXT NOT NULL UNIQUE,
+                description TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query(
+            r#"
+            CREATE TABLE posts (
+                id TEXT PRIMARY KEY,
+                body_markdown TEXT NOT NULL,
+                author_sub TEXT NOT NULL REFERENCES users(sub) ON DELETE RESTRICT ON UPDATE CASCADE,
+                subspace_id TEXT NOT NULL REFERENCES subspaces(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+                created_at TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query(
+            r#"
+            CREATE TABLE tags (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                slug TEXT NOT NULL UNIQUE,
+                created_at TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query(
+            r#"
+            CREATE TABLE post_tags (
+                post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE ON UPDATE CASCADE,
+                tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE ON UPDATE CASCADE,
+                created_at TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (post_id, tag_id)
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    struct TestResponse {
+        status: StatusCode,
+        body: Value,
+    }
+
+    async fn post_bot_article(state: AppState, token: Option<&str>, body: Value) -> TestResponse {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/api/bot/posts")
+            .header("content-type", "application/json");
+
+        if let Some(token) = token {
+            request = request.header(header::AUTHORIZATION, format!("Bearer {token}"));
+        }
+
+        let response = router()
+            .with_state(state)
+            .oneshot(
+                request
+                    .body(Body::from(body.to_string()))
+                    .expect("request should be valid"),
+            )
+            .await
+            .expect("router should respond");
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let body = serde_json::from_slice(&bytes).expect("response body should be JSON");
+
+        TestResponse { status, body }
+    }
 }
