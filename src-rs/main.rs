@@ -1,12 +1,16 @@
+mod auth;
 mod config;
 mod db;
 mod models;
+mod state;
 
 use std::{env, error::Error, net::SocketAddr};
 
+use auth::AuthVerifier;
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use config::ServerConfig;
 use db::Database;
+use state::AppState;
 use tokio::{net::TcpListener, signal};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::info;
@@ -23,8 +27,10 @@ async fn main() -> AppResult<()> {
 
     let config = ServerConfig::load()?;
     let database = Database::connect(&config)?;
+    let auth = AuthVerifier::new(config.auth.clone(), database.clone());
+    let state = AppState { auth, database };
     let addr = listen_addr()?;
-    let app = build_router(database);
+    let app = build_router(state);
     let listener = TcpListener::bind(addr).await?;
 
     info!(%addr, self_url = %config.self_url, "starting Axum API server");
@@ -46,13 +52,13 @@ fn init_tracing() {
         .init();
 }
 
-fn build_router(database: Database) -> Router {
+fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health_check))
         .route("/api/health", get(health_check))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
-        .with_state(database)
+        .with_state(state)
 }
 
 async fn health_check() -> impl IntoResponse {
