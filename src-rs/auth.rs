@@ -1,9 +1,11 @@
 use std::{error::Error, fmt, sync::Arc};
 
 use axum::{
-    extract::FromRequestParts,
-    http::{header, request::Parts, StatusCode},
-    response::{IntoResponse, Response},
+    extract::{FromRequestParts, Query, State},
+    http::{header, request::Parts, HeaderMap, HeaderValue, StatusCode},
+    response::{IntoResponse, Redirect, Response},
+    routing::get,
+    Json, Router,
 };
 use jsonwebtoken::{
     decode, decode_header,
@@ -13,15 +15,46 @@ use jsonwebtoken::{
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
+use url::Url;
 
 use crate::{
     config::AuthConfig,
     db::{Database, DbError},
-    models,
+    models::{self, UserRole},
     state::AppState,
 };
 
 const MCTAI_SESSION_COOKIE: &str = "mctai_session";
+
+#[derive(Debug, Deserialize)]
+struct LoginQuery {
+    return_to: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct AuthSessionResponse {
+    authenticated: bool,
+    user: Option<AuthUserResponse>,
+}
+
+#[derive(Debug, Serialize)]
+struct AuthUserResponse {
+    email: String,
+    #[serde(rename = "emailVerified")]
+    email_verified: bool,
+    name: Option<String>,
+    #[serde(rename = "pictureUrl")]
+    picture_url: Option<String>,
+    role: &'static str,
+    sub: String,
+}
+
+pub fn router() -> Router<AppState> {
+    Router::new()
+        .route("/api/auth/login", get(login))
+        .route("/api/auth/logout", get(logout_get).post(logout_post))
+        .route("/api/auth/session", get(session))
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MctaiSessionClaims {
@@ -56,6 +89,8 @@ pub struct AuthVerifier {
     http_client: Client,
     jwks_cache: Arc<RwLock<Option<JwkSet>>>,
     jwks_url: String,
+    secure_cookies: bool,
+    self_url: String,
 }
 
 #[derive(Debug)]
@@ -110,7 +145,12 @@ impl From<DbError> for AuthError {
 }
 
 impl AuthVerifier {
-    pub fn new(config: AuthConfig, database: Database) -> Self {
+    pub fn new(
+        config: AuthConfig,
+        database: Database,
+        self_url: String,
+        secure_cookies: bool,
+    ) -> Self {
         Self {
             app_token: config.app_token,
             auth_url: config.url,
@@ -118,7 +158,53 @@ impl AuthVerifier {
             http_client: Client::new(),
             jwks_cache: Arc::new(RwLock::new(None)),
             jwks_url: config.jwks_url,
+            secure_cookies,
+            self_url,
         }
+    }
+
+    fn login_url(&self, return_to: Option<&str>) -> Result<Url, AuthError> {
+        let auth_base = Url::parse(&self.auth_url)
+            .map_err(|_| AuthError::InvalidClaims("MCTAI_AUTH_URL is not a valid URL"))?;
+        let mut login_url = auth_base
+            .join("/login")
+            .map_err(|_| AuthError::InvalidClaims("unable to build auth login URL"))?;
+        let return_to = self.frontend_return_url(return_to)?;
+
+        login_url
+            .query_pairs_mut()
+            .append_pair("app_token", &self.app_token)
+            .append_pair("return_to", return_to.as_str());
+
+        Ok(login_url)
+    }
+
+    fn frontend_return_url(&self, return_to: Option<&str>) -> Result<Url, AuthError> {
+        let self_url = Url::parse(&self.self_url)
+            .map_err(|_| AuthError::InvalidClaims("SELF_URL is not a valid URL"))?;
+        let candidate = return_to.filter(|value| !value.is_empty()).unwrap_or("/");
+        let target = if candidate.starts_with('/') {
+            self_url
+                .join(candidate)
+                .map_err(|_| AuthError::InvalidClaims("invalid return_to"))?
+        } else {
+            Url::parse(candidate).unwrap_or_else(|_| self_url.clone())
+        };
+
+        if target.origin().ascii_serialization() != self_url.origin().ascii_serialization()
+            || target.path().starts_with("/api/")
+        {
+            return Ok(self_url);
+        }
+
+        Ok(target)
+    }
+
+    fn clear_cookie(&self) -> String {
+        let secure = if self.secure_cookies { "; Secure" } else { "" };
+        format!(
+            "{MCTAI_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT{secure}"
+        )
     }
 
     #[allow(dead_code)]
@@ -212,6 +298,96 @@ impl AuthVerifier {
             .await
             .map_err(|error| AuthError::JwksFetch(error.to_string()))
     }
+}
+
+async fn login(
+    State(state): State<AppState>,
+    Query(query): Query<LoginQuery>,
+) -> impl IntoResponse {
+    match state.auth.login_url(query.return_to.as_deref()) {
+        Ok(url) => Redirect::temporary(url.as_str()).into_response(),
+        Err(error) => auth_server_error(error),
+    }
+}
+
+async fn logout_post(State(state): State<AppState>) -> impl IntoResponse {
+    let mut headers = HeaderMap::new();
+    if let Ok(cookie) = HeaderValue::from_str(&state.auth.clear_cookie()) {
+        headers.insert(header::SET_COOKIE, cookie);
+    }
+
+    (
+        StatusCode::OK,
+        headers,
+        Json(AuthSessionResponse {
+            authenticated: false,
+            user: None,
+        }),
+    )
+        .into_response()
+}
+
+async fn logout_get(State(state): State<AppState>) -> impl IntoResponse {
+    let mut headers = HeaderMap::new();
+    if let Ok(cookie) = HeaderValue::from_str(&state.auth.clear_cookie()) {
+        headers.insert(header::SET_COOKIE, cookie);
+    }
+
+    (StatusCode::SEE_OTHER, headers, [(header::LOCATION, "/")]).into_response()
+}
+
+async fn session(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    let cookie_header = headers
+        .get(header::COOKIE)
+        .and_then(|value| value.to_str().ok());
+
+    match state.auth.authenticate_cookie_header(cookie_header).await {
+        Ok(Some(actor)) => Json(AuthSessionResponse {
+            authenticated: true,
+            user: Some(AuthUserResponse::from_user(actor.user)),
+        })
+        .into_response(),
+        Ok(None)
+        | Err(AuthError::InvalidClaims(_))
+        | Err(AuthError::InvalidToken(_))
+        | Err(AuthError::JwksFetch(_))
+        | Err(AuthError::MissingSessionCookie)
+        | Err(AuthError::MissingSigningKey)
+        | Err(AuthError::UnsupportedAlgorithm(_)) => Json(AuthSessionResponse {
+            authenticated: false,
+            user: None,
+        })
+        .into_response(),
+        Err(error @ AuthError::Database(_)) => auth_server_error(error),
+    }
+}
+
+impl AuthUserResponse {
+    fn from_user(user: models::User) -> Self {
+        Self {
+            email: user.email,
+            email_verified: user.email_verified,
+            name: user.name,
+            picture_url: user.picture_url,
+            role: match user.role {
+                UserRole::Admin => "ADMIN",
+                UserRole::User => "USER",
+            },
+            sub: user.sub,
+        }
+    }
+}
+
+fn auth_server_error(error: AuthError) -> Response {
+    tracing::error!(error = ?error, message = %error, "auth endpoint failed");
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(AuthSessionResponse {
+            authenticated: false,
+            user: None,
+        }),
+    )
+        .into_response()
 }
 
 impl IntoResponse for AuthRejection {
