@@ -34,6 +34,15 @@ impl From<sqlx::Error> for DbError {
     }
 }
 
+impl DbError {
+    pub fn is_unique_violation(&self) -> bool {
+        matches!(
+            self,
+            Self::Sqlx(sqlx::Error::Database(error)) if error.code().as_deref() == Some("23505")
+        )
+    }
+}
+
 #[derive(Clone)]
 pub struct Database {
     pool: PgPool,
@@ -290,6 +299,72 @@ impl Database {
         .await?;
 
         Ok(subspace)
+    }
+
+    pub async fn create_subspace(
+        &self,
+        id: &str,
+        name: &str,
+        slug: &str,
+        description: &str,
+    ) -> Result<models::Subspace, DbError> {
+        let subspace = sqlx::query_as::<_, models::Subspace>(
+            r#"
+            INSERT INTO subspaces (id, name, slug, description, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, NOW(), NOW())
+            RETURNING id, name, slug, description, created_at, updated_at
+            "#,
+        )
+        .bind(id)
+        .bind(name)
+        .bind(slug)
+        .bind(description)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(subspace)
+    }
+
+    pub async fn update_subspace(
+        &self,
+        id: &str,
+        name: &str,
+        slug: &str,
+        description: &str,
+    ) -> Result<Option<models::Subspace>, DbError> {
+        let subspace = sqlx::query_as::<_, models::Subspace>(
+            r#"
+            UPDATE subspaces
+            SET name = $2,
+                slug = $3,
+                description = $4,
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING id, name, slug, description, created_at, updated_at
+            "#,
+        )
+        .bind(id)
+        .bind(name)
+        .bind(slug)
+        .bind(description)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(subspace)
+    }
+
+    pub async fn delete_subspace(&self, id: &str) -> Result<bool, DbError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM subspaces
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
     }
 
     pub async fn post_by_id(&self, id: &str) -> Result<Option<models::Post>, DbError> {
