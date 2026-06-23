@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PaginationControls } from "@/components/pagination-controls";
 import { prisma } from "@/lib/db";
 import { buildPageMetadata } from "@/lib/page-metadata";
+import {
+  getPageFromSearchParams,
+  getPagination,
+  type PaginationSearchParams,
+} from "@/lib/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +16,7 @@ type TagDetailPageProps = {
   params: Promise<{
     slug: string;
   }>;
+  searchParams?: Promise<PaginationSearchParams>;
 };
 
 function cleanMarkdownLine(line: string): string {
@@ -64,45 +71,64 @@ async function getTag(slug: string) {
     select: {
       id: true,
       name: true,
-      posts: {
-        orderBy: {
-          post: {
-            createdAt: "desc",
-          },
-        },
+      slug: true,
+    },
+  });
+}
+
+async function getTagPosts(slug: string, page: number) {
+  return prisma.postTag.findMany({
+    orderBy: {
+      post: {
+        createdAt: "desc",
+      },
+    },
+    select: {
+      post: {
         select: {
-          post: {
+          author: {
             select: {
-              author: {
-                select: {
-                  email: true,
-                  name: true,
-                },
-              },
-              bodyMarkdown: true,
-              createdAt: true,
-              id: true,
-              subspace: {
-                select: {
-                  name: true,
-                  slug: true,
-                },
-              },
-              tags: {
-                include: {
-                  tag: true,
-                },
-                orderBy: {
-                  tag: {
-                    name: "asc",
-                  },
-                },
+              email: true,
+              name: true,
+            },
+          },
+          bodyMarkdown: true,
+          createdAt: true,
+          id: true,
+          subspace: {
+            select: {
+              name: true,
+              slug: true,
+            },
+          },
+          tags: {
+            include: {
+              tag: true,
+            },
+            orderBy: {
+              tag: {
+                name: "asc",
               },
             },
           },
         },
       },
-      slug: true,
+    },
+    where: {
+      tag: {
+        slug,
+      },
+    },
+    ...getPagination(page),
+  });
+}
+
+async function getTagPostCount(slug: string) {
+  return prisma.postTag.count({
+    where: {
+      tag: {
+        slug,
+      },
     },
   });
 }
@@ -111,7 +137,10 @@ export async function generateMetadata({
   params,
 }: TagDetailPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const tag = await getTag(slug);
+  const [tag, postCount] = await Promise.all([
+    getTag(slug),
+    getTagPostCount(slug),
+  ]);
 
   if (!tag) {
     return buildPageMetadata({
@@ -124,16 +153,27 @@ export async function generateMetadata({
   return buildPageMetadata({
     title: tag.name,
     description:
-      tag.posts.length === 1
+      postCount === 1
         ? `Read 1 AI News post tagged ${tag.name}.`
-        : `Read ${tag.posts.length} AI News posts tagged ${tag.name}.`,
+        : `Read ${postCount} AI News posts tagged ${tag.name}.`,
     path: `/t/${tag.slug}`,
   });
 }
 
-export default async function TagDetailPage({ params }: TagDetailPageProps) {
-  const { slug } = await params;
-  const tag = await getTag(slug);
+export default async function TagDetailPage({
+  params,
+  searchParams,
+}: TagDetailPageProps) {
+  const [{ slug }, resolvedSearchParams] = await Promise.all([
+    params,
+    searchParams,
+  ]);
+  const page = getPageFromSearchParams(resolvedSearchParams);
+  const [tag, postTags, postCount] = await Promise.all([
+    getTag(slug),
+    getTagPosts(slug, page),
+    getTagPostCount(slug),
+  ]);
 
   if (!tag) {
     notFound();
@@ -159,9 +199,9 @@ export default async function TagDetailPage({ params }: TagDetailPageProps) {
           {tag.name}
         </h1>
         <p className="m-0 max-w-2xl text-base leading-7 text-muted">
-          {tag.posts.length === 1
+          {postCount === 1
             ? "1 post is tagged here."
-            : `${tag.posts.length} posts are tagged here.`}
+            : `${postCount} posts are tagged here.`}
         </p>
       </header>
 
@@ -175,9 +215,9 @@ export default async function TagDetailPage({ params }: TagDetailPageProps) {
           </h2>
         </div>
 
-        {tag.posts.length > 0 ? (
+        {postTags.length > 0 ? (
           <div className="grid gap-3">
-            {tag.posts.map(({ post }) => (
+            {postTags.map(({ post }) => (
               <article
                 className="grid gap-3 rounded-lg border border-border bg-panel p-5"
                 key={post.id}
@@ -249,6 +289,9 @@ export default async function TagDetailPage({ params }: TagDetailPageProps) {
             </p>
           </div>
         )}
+        {postCount > 0 ? (
+          <PaginationControls page={page} total={postCount} />
+        ) : null}
       </section>
     </main>
   );
