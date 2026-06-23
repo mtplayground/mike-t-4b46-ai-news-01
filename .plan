@@ -1,30 +1,31 @@
-Architecture plan for Issue #115: Harden server-render error handling for home and admin routes
+Architecture plan for Issue #117: Render full post cards on the tag detail page and remove date cards
 
-Current structure:
-- Public App Router pages live under src/app/(public), with the home route in src/app/(public)/page.tsx.
-- Admin App Router pages live under src/app/(admin), with the admin dashboard in src/app/(admin)/admin/page.tsx.
-- Database reads for the affected routes use the shared Prisma client from src/lib/db.ts.
-- Reusable UI building blocks live in src/components; existing route-state-panel.tsx provides loading/error-style presentation patterns used elsewhere.
+Module structure and file organization
+- Primary change is isolated to `src/app/(public)/t/[slug]/page.tsx`, the public tag detail route.
+- The tag detail route should own the page-level Prisma query, metadata generation, and rendering for posts belonging to the selected tag.
+- Post-card presentation should match the existing public post-card pattern used by `src/app/(public)/page.tsx` and `src/app/(public)/s/[slug]/page.tsx`:
+  - derive title from the first non-empty markdown line,
+  - derive a plain-text excerpt from markdown,
+  - show author, creation date, subspace, and tag chips,
+  - link the card title to `/s/${post.subspace.slug}/${post.id}`.
+- If implementation time allows, duplicate markdown helper functions can later be extracted into a small shared utility (for example `src/lib/post-preview.ts`) to reduce repeated logic across home, subspace, and tag pages. For this single issue, keeping the change scoped to the tag page is lowest risk.
 
-Planned module/file changes:
-- Add src/app/(public)/error.tsx as a client route-level error boundary for public route render failures.
-- Add src/app/(admin)/admin/error.tsx as a client route-level error boundary for admin dashboard render failures.
-- Update src/app/(public)/page.tsx so getHomeData() catches Prisma/page-loader failures, logs a useful server-side message with the original error object, and rethrows so the new boundary handles display.
-- Update src/app/(admin)/admin/page.tsx so getPosts(), getSubspaces(), and getTags() each catch loader failures, log route/function-specific context with the original error object, and rethrow so the admin boundary handles display.
+Shared types and data shape
+- The tag query must select complete post-card data from each `PostTag.post` relation:
+  - `id`, `bodyMarkdown`, `createdAt`,
+  - `author: { name, email }`,
+  - `subspace: { name, slug }`,
+  - `tags: [{ tag: { id, name, slug } }]` ordered by tag name.
+- The tag-level `createdAt` and `updatedAt` fields are no longer needed for rendering once the date cards are removed.
+- Metadata can continue to use `tag.name`, `tag.slug`, and `tag.posts.length`.
 
-Dependencies and sequencing:
-- No issue dependencies; this is a single hardening issue.
-- Error boundary files can be added independently, then loader logging can be patched route by route.
-- Existing public/admin data shapes and Prisma queries should remain unchanged.
+Dependencies between issues
+- There is only one issue in this batch, so there are no cross-issue dependencies.
+- The change depends only on the existing Prisma schema relationships between `Tag`, `PostTag`, `Post`, `User`, `Subspace`, and `Tag`.
 
-Key design decisions:
-- Use Next.js App Router error boundaries with "use client" and reset() actions for recoverability.
-- Keep changes focused: do not refactor page loaders or alter database query semantics.
-- Log server-render loader failures with stable route/function labels plus the full unknown error object for production observability.
-- User-facing error UI should avoid leaking internal database/error details while offering a retry control and navigation fallback.
-- Preserve the existing AI News brand and page styling conventions.
-
-Validation plan:
-- Run npm run lint/typecheck if dependencies are available.
-- Run npm test where feasible.
-- Build validation should continue through prisma generate, next build, and cargo build for the Axum API.
+Key design decisions
+- Remove the entire "Tag details" section that renders Created/Updated cards, rather than hiding it with CSS, so the dates are absent from the accessible page structure.
+- Render real post cards instead of post IDs to keep tag pages consistent with home and subspace pages.
+- Preserve existing empty-state copy for tags with no posts.
+- Use `prefetch={false}` consistently with existing public links in this app.
+- Validate with lint/type checks and, if available, relevant tests after implementation.
