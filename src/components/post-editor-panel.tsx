@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   createPost,
   deletePost,
@@ -11,6 +11,7 @@ import {
   updatePost,
 } from "@/lib/admin-api";
 import { MarkdownMediaUploader } from "@/components/markdown-media-uploader";
+import { POSTS_PER_PAGE } from "@/lib/pagination";
 
 type FieldErrors = NonNullable<
   Extract<PostActionResult, { ok: false }>["fieldErrors"]
@@ -82,6 +83,7 @@ export function PostEditorPanel({
   });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const [deleteCandidateId, setDeleteCandidateId] = useState<string | null>(
     null,
   );
@@ -95,8 +97,18 @@ export function PostEditorPanel({
     () => posts.find((post) => post.id === deleteCandidateId) ?? null,
     [deleteCandidateId, posts],
   );
+  const totalPages = Math.max(1, Math.ceil(posts.length / POSTS_PER_PAGE));
+  const visiblePosts = useMemo(() => {
+    const start = (page - 1) * POSTS_PER_PAGE;
+
+    return posts.slice(start, start + POSTS_PER_PAGE);
+  }, [page, posts]);
   const mode = selectedPost ? "Edit post" : "Create post";
   const canSubmit = subspaces.length > 0 && !isPending;
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   function updateField(field: keyof FormState, value: string | string[]) {
     setFormState((current) => ({
@@ -176,6 +188,9 @@ export function PostEditorPanel({
       });
       setSelectedId(result.post.id);
       setFormState(formStateForPost(result.post));
+      if (!selectedPost) {
+        setPage(1);
+      }
       setMessage(selectedPost ? "Post updated." : "Post created.");
     });
   }
@@ -197,7 +212,16 @@ export function PostEditorPanel({
         return;
       }
 
+      const nextPostCount = posts.filter(
+        (post) => post.id !== result.id,
+      ).length;
+      const nextTotalPages = Math.max(
+        1,
+        Math.ceil(nextPostCount / POSTS_PER_PAGE),
+      );
+
       setPosts((current) => current.filter((post) => post.id !== result.id));
+      setPage((current) => Math.min(current, nextTotalPages));
       if (selectedId === result.id) {
         resetForm();
       }
@@ -379,7 +403,7 @@ export function PostEditorPanel({
         <h2 className="m-0 text-2xl">Existing posts</h2>
         {posts.length > 0 ? (
           <div className="grid gap-3">
-            {posts.map((post) => (
+            {visiblePosts.map((post) => (
               <button
                 className={`grid gap-2 rounded-lg border p-4 text-left ${
                   selectedId === post.id
@@ -408,6 +432,35 @@ export function PostEditorPanel({
             No posts have been created yet.
           </p>
         )}
+        {posts.length > POSTS_PER_PAGE ? (
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            {page > 1 ? (
+              <button
+                className="rounded-md border border-border bg-panel px-4 py-2 font-bold text-foreground hover:text-accent-strong disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isPending}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                type="button"
+              >
+                Prev
+              </button>
+            ) : null}
+            <span className="text-muted" aria-live="polite">
+              Page {page} of {totalPages}
+            </span>
+            {page < totalPages ? (
+              <button
+                className="rounded-md border border-border bg-panel px-4 py-2 font-bold text-foreground hover:text-accent-strong disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isPending}
+                onClick={() =>
+                  setPage((current) => Math.min(totalPages, current + 1))
+                }
+                type="button"
+              >
+                Next
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </section>
     </div>
   );
