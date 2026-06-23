@@ -1,31 +1,31 @@
-Architecture plan for Issue #117: Render full post cards on the tag detail page and remove date cards
+Architecture plan for issues #119 and #120
 
-Module structure and file organization
-- Primary change is isolated to `src/app/(public)/t/[slug]/page.tsx`, the public tag detail route.
-- The tag detail route should own the page-level Prisma query, metadata generation, and rendering for posts belonging to the selected tag.
-- Post-card presentation should match the existing public post-card pattern used by `src/app/(public)/page.tsx` and `src/app/(public)/s/[slug]/page.tsx`:
-  - derive title from the first non-empty markdown line,
-  - derive a plain-text excerpt from markdown,
-  - show author, creation date, subspace, and tag chips,
-  - link the card title to `/s/${post.subspace.slug}/${post.id}`.
-- If implementation time allows, duplicate markdown helper functions can later be extracted into a small shared utility (for example `src/lib/post-preview.ts`) to reduce repeated logic across home, subspace, and tag pages. For this single issue, keeping the change scoped to the tag page is lowest risk.
+Project shape:
+- Next.js App Router frontend in src/app with server-rendered public pages and client-side admin components.
+- Shared presentation helpers live in src/lib, including Markdown rendering in src/lib/markdown.ts and SEO helpers in src/lib/page-metadata.ts.
+- Styling is Tailwind utility-based through className strings in page components and global styles in src/app/globals.css.
 
-Shared types and data shape
-- The tag query must select complete post-card data from each `PostTag.post` relation:
-  - `id`, `bodyMarkdown`, `createdAt`,
-  - `author: { name, email }`,
-  - `subspace: { name, slug }`,
-  - `tags: [{ tag: { id, name, slug } }]` ordered by tag name.
-- The tag-level `createdAt` and `updatedAt` fields are no longer needed for rendering once the date cards are removed.
-- Metadata can continue to use `tag.name`, `tag.slug`, and `tag.posts.length`.
+Issue #119: Display subspace/post route path labels in lowercase
+- Scope is presentational only; no schema, API, or routing changes.
+- Update the route/path label className strings in:
+  - src/app/(public)/s/[slug]/[postId]/page.tsx
+  - src/app/(public)/page.tsx
+  - src/app/(public)/t/[slug]/page.tsx
+- Remove only Tailwind uppercase utilities from slug/path labels so stored lowercase slugs render as-is.
+- Preserve other typography/color/spacing classes and do not alter generated URLs.
 
-Dependencies between issues
-- There is only one issue in this batch, so there are no cross-issue dependencies.
-- The change depends only on the existing Prisma schema relationships between `Tag`, `PostTag`, `Post`, `User`, `Subspace`, and `Tag`.
+Issue #120: Add heading typography to rendered markdown articles
+- Scope is post detail rendering only.
+- Update the Markdown article/prose container in src/app/(public)/s/[slug]/[postId]/page.tsx.
+- Add nested Tailwind selectors for h1/h2/h3 sizing, font weight, and tight leading to override preflight resets while preserving existing margins and sanitized Markdown behavior.
+- No dependency changes are expected because Markdown parsing/sanitization already exists.
 
-Key design decisions
-- Remove the entire "Tag details" section that renders Created/Updated cards, rather than hiding it with CSS, so the dates are absent from the accessible page structure.
-- Render real post cards instead of post IDs to keep tag pages consistent with home and subspace pages.
-- Preserve existing empty-state copy for tags with no posts.
-- Use `prefetch={false}` consistently with existing public links in this app.
-- Validate with lint/type checks and, if available, relevant tests after implementation.
+Dependencies and sequencing:
+- The issues are independent and both affect presentation.
+- Issue #119 and #120 can be implemented in either order, but both touch post detail page className strings, so sequential edits should avoid overwriting adjacent class changes.
+- Recommended verification for each issue: npm run lint, npm run typecheck, and targeted visual/manual inspection of the affected public routes when data is available.
+
+Key design decisions:
+- Keep changes localized to page component className strings.
+- Avoid database/API/Rust changes.
+- Do not introduce new components or shared abstractions for these small one-off styling fixes unless later issues expand the pattern.

@@ -10,12 +10,3 @@ node_modules/
 .pipeline-state.json
 .gitkeep
 .progress
-.next/
-dist/
-build/
-coverage/
-playwright-report/
-test-results/
-.env*.local
-.env.production
-.authemail_decision
