@@ -1,31 +1,59 @@
-Architecture plan for issues #119 and #120
+Architecture plan for issues #123-#128: pagination
 
-Project shape:
-- Next.js App Router frontend in src/app with server-rendered public pages and client-side admin components.
-- Shared presentation helpers live in src/lib, including Markdown rendering in src/lib/markdown.ts and SEO helpers in src/lib/page-metadata.ts.
-- Styling is Tailwind utility-based through className strings in page components and global styles in src/app/globals.css.
+Project context:
+- Public pages are Next.js App Router server components under src/app/(public), using Prisma for PostgreSQL reads.
+- Admin editing UI is mostly client components under src/components; PostEditorPanel receives all posts from the server-rendered admin page.
+- Existing post-card markup and markdown title/excerpt helpers are duplicated in public list pages; pagination should not change route structure, card layout, ordering, auth, API, or database schema.
 
-Issue #119: Display subspace/post route path labels in lowercase
-- Scope is presentational only; no schema, API, or routing changes.
-- Update the route/path label className strings in:
-  - src/app/(public)/s/[slug]/[postId]/page.tsx
-  - src/app/(public)/page.tsx
-  - src/app/(public)/t/[slug]/page.tsx
-- Remove only Tailwind uppercase utilities from slug/path labels so stored lowercase slugs render as-is.
-- Preserve other typography/color/spacing classes and do not alter generated URLs.
+Module structure / file organization:
+- Add src/lib/pagination.ts as the shared server/client-safe pagination utility module.
+  - Export POSTS_PER_PAGE = 20.
+  - Export getPageFromSearchParams(searchParams) to normalize page query values to a positive integer, defaulting invalid/missing values to 1.
+  - Export getPagination(page) returning Prisma-compatible { skip, take } based on POSTS_PER_PAGE.
+  - Keep the module framework-light so Vitest can exercise it without Next-specific mocks.
+- Add a reusable PaginationControls component, preferably src/components/pagination-controls.tsx.
+  - Props should include current page, total item count, and enough URL context to preserve the current path while writing ?page=N.
+  - Render Prev only when page > 1.
+  - Render current page text.
+  - Render Next only when page * POSTS_PER_PAGE < total.
+  - Use Next Link with prefetch={false}, preserving existing query params when appropriate but setting/replacing page.
+- Public page changes:
+  - Home page src/app/(public)/page.tsx should accept searchParams, parse page, replace LATEST_POST_LIMIT with getPagination(page), fetch prisma.post.count(), and render PaginationControls for latest posts only. Leave subspace discovery unchanged.
+  - Subspace detail src/app/(public)/s/[slug]/page.tsx should split metadata fetch from paginated post fetch. Fetch subspace metadata, paginated posts, and total count in parallel where practical. Preserve newest-first ordering and existing post-card markup.
+  - Tag detail src/app/(public)/t/[slug]/page.tsx should fetch tag metadata, paginated postTag rows ordered by post.createdAt desc, and postTag count in parallel where practical. Preserve existing card data shape/layout.
+- Admin page/list changes:
+  - Implement client-side pagination inside src/components/post-editor-panel.tsx using POSTS_PER_PAGE, page state, and visiblePosts = posts.slice(...).
+  - Reset to page 1 after create. After delete, clamp the active page to totalPages so the UI never lands on an empty out-of-range page.
+  - Keep server-side admin data loading in src/app/(admin)/admin/page.tsx unchanged for now.
 
-Issue #120: Add heading typography to rendered markdown articles
-- Scope is post detail rendering only.
-- Update the Markdown article/prose container in src/app/(public)/s/[slug]/[postId]/page.tsx.
-- Add nested Tailwind selectors for h1/h2/h3 sizing, font weight, and tight leading to override preflight resets while preserving existing margins and sanitized Markdown behavior.
-- No dependency changes are expected because Markdown parsing/sanitization already exists.
+Dependencies between issues:
+1. #123 is the foundation: shared helper plus PaginationControls.
+2. #124, #125, and #126 depend on #123 and can be implemented independently after it.
+3. #127 depends on #123 for POSTS_PER_PAGE but is otherwise independent of public page pagination.
+4. #128 should come last, after all public and admin pagination behavior is present.
 
-Dependencies and sequencing:
-- The issues are independent and both affect presentation.
-- Issue #119 and #120 can be implemented in either order, but both touch post detail page className strings, so sequential edits should avoid overwriting adjacent class changes.
-- Recommended verification for each issue: npm run lint, npm run typecheck, and targeted visual/manual inspection of the affected public routes when data is available.
+Shared types / API shapes:
+- Search params should tolerate Next App Router shapes: page may be string, string[], undefined, or absent. If a page value is malformed, <=0, non-integer, or otherwise invalid, use page 1.
+- getPagination(page) returns { skip: (page - 1) * POSTS_PER_PAGE, take: POSTS_PER_PAGE }.
+- PaginationControls should not depend on Prisma types; it only needs page, total, and URL/query information.
+- For Next 15 page components, keep params/searchParams as Promise-shaped props if matching the existing code style.
 
 Key design decisions:
-- Keep changes localized to page component className strings.
-- Avoid database/API/Rust changes.
-- Do not introduce new components or shared abstractions for these small one-off styling fixes unless later issues expand the pattern.
+- Use offset pagination with Prisma skip/take because the issues explicitly specify skip/take and ?page=N URLs.
+- Keep POSTS_PER_PAGE fixed at 20 and centralized to avoid drift between server queries, UI conditions, and tests.
+- Do not add database columns, API endpoints, Rust code, auth changes, or new dependencies.
+- Preserve SEO-friendly page URLs and existing card markup; pagination only appends/replaces the page query parameter.
+- Avoid showing disabled Prev/Next placeholders unless required later; the issue says render Prev/Next conditionally.
+- For page numbers beyond the available total, allow the query to resolve normally and show an empty list with controls computed from total, unless an individual issue later asks for redirects/clamping on public pages.
+
+Testing plan for #128:
+- Add Vitest coverage for src/lib/pagination.ts: missing/invalid page, arrays, decimals, negatives/zero, valid values, skip/take math.
+- Extend Playwright seeding to create more than 20 posts with subspace and tag associations.
+- Verify home, subspace detail, and tag detail render exactly 20 cards on page 1, expose Next, and support direct ?page=2 navigation showing the remainder.
+- Verify admin PostEditorPanel caps visible posts at 20, Next reveals additional posts, create resets to page 1, and delete clamps the page when necessary.
+
+Recommended verification per implementation session:
+- npm run lint
+- npm run typecheck
+- npm test
+- npm run e2e when database/env are available, especially for #128
