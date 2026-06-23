@@ -1,35 +1,30 @@
-Architecture plan for Issue #113
+Architecture plan for Issue #115: Harden server-render error handling for home and admin routes
 
-Module structure and file organization
-- Keep the existing server-rendered admin page at `src/app/(admin)/admin/page.tsx` responsible for fetching posts, subspaces, and tags from Prisma and serializing those records for client components.
-- Add a focused client component at `src/components/admin-content-tabs.tsx`.
-  - This component will own only tab UI state and accessibility attributes.
-  - It will receive the same data currently passed directly to `PostEditorPanel`, `SubspaceAdminPanel`, and `TagAdminPanel`.
-  - It will render the three existing panels without changing their internal state, API helpers, or backend endpoints.
-- Update `src/app/(admin)/admin/page.tsx` to import `AdminContentTabs` and replace the three stacked management `<section>` blocks with one tabbed content area.
-- No database, Prisma schema, Rust API, auth, storage, or public page changes are needed.
+Current structure:
+- Public App Router pages live under src/app/(public), with the home route in src/app/(public)/page.tsx.
+- Admin App Router pages live under src/app/(admin), with the admin dashboard in src/app/(admin)/admin/page.tsx.
+- Database reads for the affected routes use the shared Prisma client from src/lib/db.ts.
+- Reusable UI building blocks live in src/components; existing route-state-panel.tsx provides loading/error-style presentation patterns used elsewhere.
 
-Shared types
-- Reuse existing exported admin API types from `src/lib/admin-api.ts`:
-  - `SerializedPost`
-  - `SerializedSubspace`
-  - `SerializedTag`
-- The new component props should keep these exact types to avoid duplicating data contracts.
+Planned module/file changes:
+- Add src/app/(public)/error.tsx as a client route-level error boundary for public route render failures.
+- Add src/app/(admin)/admin/error.tsx as a client route-level error boundary for admin dashboard render failures.
+- Update src/app/(public)/page.tsx so getHomeData() catches Prisma/page-loader failures, logs a useful server-side message with the original error object, and rethrows so the new boundary handles display.
+- Update src/app/(admin)/admin/page.tsx so getPosts(), getSubspaces(), and getTags() each catch loader failures, log route/function-specific context with the original error object, and rethrow so the admin boundary handles display.
 
-Dependencies
-- This issue depends on the existing `PostEditorPanel`, `SubspaceAdminPanel`, and `TagAdminPanel` components already being present and functional.
-- There are no cross-issue dependencies in this batch and no migration requirements.
+Dependencies and sequencing:
+- No issue dependencies; this is a single hardening issue.
+- Error boundary files can be added independently, then loader logging can be patched route by route.
+- Existing public/admin data shapes and Prisma queries should remain unchanged.
 
-Key design decisions
-- Default active tab is `Posts` so the existing admin post creation flow remains visible by default and current E2E assumptions continue to hold.
-- Use semantic ARIA tabs:
-  - container with `role="tablist"`
-  - each tab button with `role="tab"`, `aria-selected`, `aria-controls`, and stable IDs
-  - each panel with `role="tabpanel"`, `aria-labelledby`, and hidden state for inactive panels
-- Keep all panels mounted only as needed by the active tab unless tests reveal state preservation is required. If preserving in-progress edits between tabs matters, keep all panels mounted and hide inactive panels with `hidden`.
-- Preserve existing panel labels and visual styling by wrapping each panel in the same bordered panel style currently used on the admin page.
-- Do not alter authentication behavior; `/admin` stays protected by the existing admin/session flow.
+Key design decisions:
+- Use Next.js App Router error boundaries with "use client" and reset() actions for recoverability.
+- Keep changes focused: do not refactor page loaders or alter database query semantics.
+- Log server-render loader failures with stable route/function labels plus the full unknown error object for production observability.
+- User-facing error UI should avoid leaking internal database/error details while offering a retry control and navigation fallback.
+- Preserve the existing AI News brand and page styling conventions.
 
-Verification plan
-- Run TypeScript checks after implementation.
-- Run or update the relevant admin E2E flow if available, ensuring the Posts tab is active by default and Subspaces/Tags tabs can be selected.
+Validation plan:
+- Run npm run lint/typecheck if dependencies are available.
+- Run npm test where feasible.
+- Build validation should continue through prisma generate, next build, and cargo build for the Axum API.
