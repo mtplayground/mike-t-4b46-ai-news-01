@@ -179,8 +179,9 @@ function prefixLines(name, chunk) {
 
 function copyHeaders(sourceHeaders, targetHost, targetPort) {
   const headers = { ...sourceHeaders };
-  headers.host = `${targetHost}:${targetPort}`;
-  headers["x-forwarded-host"] = sourceHeaders.host ?? headers.host;
+  const publicHost = sourceHeaders.host ?? `${targetHost}:${targetPort}`;
+  headers.host = publicHost;
+  headers["x-forwarded-host"] = publicHost;
   headers["x-forwarded-proto"] = process.env.FORWARDED_PROTO ?? "https";
   headers["x-forwarded-port"] = String(PUBLIC_PORT);
   return headers;
