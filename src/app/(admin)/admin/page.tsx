@@ -1,11 +1,9 @@
-import { PostEditorPanel } from "@/components/post-editor-panel";
+import { AdminContentTabs } from "@/components/admin-content-tabs";
 import type {
   SerializedPost,
   SerializedSubspace,
   SerializedTag,
 } from "@/lib/admin-api";
-import { SubspaceAdminPanel } from "@/components/subspace-admin-panel";
-import { TagAdminPanel } from "@/components/tag-admin-panel";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -127,30 +125,7 @@ export default async function AdminPage() {
         </p>
       </header>
 
-      <section
-        aria-label="Subspace management"
-        className="rounded-lg border border-border bg-panel p-5"
-      >
-        <SubspaceAdminPanel initialSubspaces={subspaces} />
-      </section>
-
-      <section
-        aria-label="Tag management"
-        className="rounded-lg border border-border bg-panel p-5"
-      >
-        <TagAdminPanel initialTags={tags} />
-      </section>
-
-      <section
-        aria-label="Post management"
-        className="rounded-lg border border-border bg-panel p-5"
-      >
-        <PostEditorPanel
-          initialPosts={posts}
-          subspaces={subspaces}
-          tags={tags}
-        />
-      </section>
+      <AdminContentTabs posts={posts} subspaces={subspaces} tags={tags} />
     </main>
   );
 }
