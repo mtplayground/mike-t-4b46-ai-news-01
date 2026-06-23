@@ -20,6 +20,22 @@ export const metadata: Metadata = buildPageMetadata({
 
 const LATEST_POST_LIMIT = 20;
 
+type ErrorWithDigest = Error & { digest?: string };
+
+type HomeUnavailableSection = "latestPosts" | "subspaces";
+
+function getErrorDigest(error: unknown): string | undefined {
+  return error instanceof Error ? (error as ErrorWithDigest).digest : undefined;
+}
+
+function logHomeDataError(section: HomeUnavailableSection, error: unknown) {
+  console.error("[public home] failed to load page data", {
+    digest: getErrorDigest(error),
+    error,
+    section,
+  });
+}
+
 function cleanMarkdownLine(line: string): string {
   return line
     .replace(/^#{1,6}\s+/, "")
@@ -65,8 +81,9 @@ function formatDate(value: Date): string {
 }
 
 async function getHomeData() {
-  const [subspaces, latestPosts] = await Promise.all([
-    prisma.subspace.findMany({
+  try {
+    const unavailableSections: HomeUnavailableSection[] = [];
+    const subspacesPromise = prisma.subspace.findMany({
       orderBy: [
         {
           name: "asc",
@@ -86,8 +103,8 @@ async function getHomeData() {
         name: true,
         slug: true,
       },
-    }),
-    prisma.post.findMany({
+    });
+    const latestPostsPromise = prisma.post.findMany({
       include: {
         author: {
           select: {
@@ -116,18 +133,51 @@ async function getHomeData() {
         createdAt: "desc",
       },
       take: LATEST_POST_LIMIT,
-    }),
-  ]);
+    });
+    const [subspacesResult, latestPostsResult] = await Promise.allSettled([
+      subspacesPromise,
+      latestPostsPromise,
+    ] as const);
 
-  return {
-    latestPosts,
-    subspaces,
-  };
+    if (subspacesResult.status === "rejected") {
+      unavailableSections.push("subspaces");
+      logHomeDataError("subspaces", subspacesResult.reason);
+    }
+
+    if (latestPostsResult.status === "rejected") {
+      unavailableSections.push("latestPosts");
+      logHomeDataError("latestPosts", latestPostsResult.reason);
+    }
+
+    return {
+      latestPosts:
+        latestPostsResult.status === "fulfilled" ? latestPostsResult.value : [],
+      subspaces:
+        subspacesResult.status === "fulfilled" ? subspacesResult.value : [],
+      unavailableSections,
+    };
+  } catch (error) {
+    console.error("[public home] unexpected getHomeData failure", {
+      digest: getErrorDigest(error),
+      error,
+    });
+
+    return {
+      latestPosts: [],
+      subspaces: [],
+      unavailableSections: [
+        "latestPosts",
+        "subspaces",
+      ] satisfies HomeUnavailableSection[],
+    };
+  }
 }
 
 export default async function HomePage() {
-  const { latestPosts, subspaces } = await getHomeData();
+  const { latestPosts, subspaces, unavailableSections } = await getHomeData();
   const siteJsonLd = buildSiteJsonLd();
+  const latestPostsUnavailable = unavailableSections.includes("latestPosts");
+  const subspacesUnavailable = unavailableSections.includes("subspaces");
 
   return (
     <main className="mx-auto grid w-full max-w-[1080px] gap-10 px-3 py-8 sm:px-4 sm:py-12">
@@ -140,6 +190,21 @@ export default async function HomePage() {
           The Latest Global AI News
         </h1>
       </header>
+
+      {unavailableSections.length > 0 ? (
+        <section
+          aria-live="polite"
+          className="rounded-lg border border-border bg-panel p-5"
+        >
+          <p className="m-0 text-sm font-bold text-foreground">
+            Some AI News content is temporarily unavailable.
+          </p>
+          <p className="m-0 mt-2 text-sm leading-6 text-muted">
+            The page is still available while we retry the affected data in the
+            background.
+          </p>
+        </section>
+      ) : null}
 
       <section className="grid gap-4" aria-label="Latest news">
         {latestPosts.length > 0 ? (
@@ -198,7 +263,9 @@ export default async function HomePage() {
         ) : (
           <div className="rounded-lg border border-border bg-panel p-5">
             <p className="m-0 text-sm leading-6 text-muted">
-              No posts have been published yet.
+              {latestPostsUnavailable
+                ? "Latest posts could not be loaded right now."
+                : "No posts have been published yet."}
             </p>
           </div>
         )}
@@ -255,7 +322,9 @@ export default async function HomePage() {
         ) : (
           <div className="rounded-lg border border-border bg-panel p-5">
             <p className="m-0 text-sm leading-6 text-muted">
-              No subspaces have been published yet.
+              {subspacesUnavailable
+                ? "Subspaces could not be loaded right now."
+                : "No subspaces have been published yet."}
             </p>
           </div>
         )}
