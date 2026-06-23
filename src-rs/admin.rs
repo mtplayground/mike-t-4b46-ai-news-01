@@ -1,8 +1,8 @@
-use std::{error::Error, fmt};
+use std::{collections::HashMap, error::Error, fmt};
 
 use axum::{
     body::Bytes,
-    extract::State,
+    extract::{Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -207,12 +207,18 @@ pub struct PersistedAdminSession {
 
 async fn login(
     State(state): State<AppState>,
+    Query(query): Query<HashMap<String, String>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
+    let wants_redirect = !is_json_request(&headers);
     let password = read_password(&headers, &body);
 
     if !state.admin.verify_password(&password) {
+        if wants_redirect {
+            return redirect_response(StatusCode::SEE_OTHER, "/sign-in?error=admin");
+        }
+
         return (
             StatusCode::UNAUTHORIZED,
             Json(AdminSessionResponse {
@@ -232,6 +238,15 @@ async fn login(
                     .session_cookie(&admin_session.token, admin_session.expires),
             ) {
                 headers.insert(header::SET_COOKIE, cookie);
+            }
+
+            if wants_redirect {
+                let return_to = safe_return_to(query.get("return_to").map(String::as_str));
+                if let Ok(location) = HeaderValue::from_str(&return_to) {
+                    headers.insert(header::LOCATION, location);
+                }
+
+                return (StatusCode::SEE_OTHER, headers).into_response();
             }
 
             (
@@ -316,23 +331,44 @@ fn admin_server_error(error: AdminAuthError) -> axum::response::Response {
         .into_response()
 }
 
-fn read_password(headers: &HeaderMap, body: &[u8]) -> String {
-    let content_type = headers
+fn is_json_request(headers: &HeaderMap) -> bool {
+    headers
         .get(header::CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
-        .unwrap_or_default();
+        .is_some_and(|content_type| content_type.contains("application/json"))
+}
 
-    if content_type.contains("application/json") {
+fn safe_return_to(value: Option<&str>) -> String {
+    let Some(value) = value else {
+        return "/admin".to_owned();
+    };
+
+    if value.starts_with('/') && !value.starts_with("/api/") && !value.starts_with("//") {
+        value.to_owned()
+    } else {
+        "/admin".to_owned()
+    }
+}
+
+fn redirect_response(status: StatusCode, location: &str) -> axum::response::Response {
+    let mut headers = HeaderMap::new();
+    if let Ok(location) = HeaderValue::from_str(location) {
+        headers.insert(header::LOCATION, location);
+    }
+
+    (status, headers).into_response()
+}
+
+fn read_password(headers: &HeaderMap, body: &[u8]) -> String {
+    if is_json_request(headers) {
         return serde_json::from_slice::<LoginRequest>(body)
             .ok()
             .and_then(|request| request.password)
             .unwrap_or_default();
     }
 
-    String::from_utf8_lossy(body)
-        .split('&')
-        .filter_map(|part| part.split_once('='))
-        .find_map(|(name, value)| (name == "password").then(|| value.replace('+', " ")))
+    url::form_urlencoded::parse(body)
+        .find_map(|(name, value)| (name == "password").then(|| value.into_owned()))
         .unwrap_or_default()
 }
 
