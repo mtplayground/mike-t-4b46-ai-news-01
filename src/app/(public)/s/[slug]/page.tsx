@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PaginationControls } from "@/components/pagination-controls";
 import { prisma } from "@/lib/db";
 import { buildPageMetadata } from "@/lib/page-metadata";
+import {
+  getPageFromSearchParams,
+  getPagination,
+  type PaginationSearchParams,
+} from "@/lib/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +16,7 @@ type SubspaceDetailPageProps = {
   params: Promise<{
     slug: string;
   }>;
+  searchParams?: Promise<PaginationSearchParams>;
 };
 
 function cleanMarkdownLine(line: string): string {
@@ -68,28 +75,47 @@ async function getSubspace(slug: string) {
       name: true,
       slug: true,
       updatedAt: true,
-      posts: {
+    },
+  });
+}
+
+async function getSubspacePosts(slug: string, page: number) {
+  return prisma.post.findMany({
+    include: {
+      author: {
+        select: {
+          email: true,
+          name: true,
+        },
+      },
+      tags: {
         include: {
-          author: {
-            select: {
-              email: true,
-              name: true,
-            },
-          },
-          tags: {
-            include: {
-              tag: true,
-            },
-            orderBy: {
-              tag: {
-                name: "asc",
-              },
-            },
-          },
+          tag: true,
         },
         orderBy: {
-          createdAt: "desc",
+          tag: {
+            name: "asc",
+          },
         },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    where: {
+      subspace: {
+        slug,
+      },
+    },
+    ...getPagination(page),
+  });
+}
+
+async function getSubspacePostCount(slug: string) {
+  return prisma.post.count({
+    where: {
+      subspace: {
+        slug,
       },
     },
   });
@@ -120,9 +146,18 @@ export async function generateMetadata({
 
 export default async function SubspaceDetailPage({
   params,
+  searchParams,
 }: SubspaceDetailPageProps) {
-  const { slug } = await params;
-  const subspace = await getSubspace(slug);
+  const [{ slug }, resolvedSearchParams] = await Promise.all([
+    params,
+    searchParams,
+  ]);
+  const page = getPageFromSearchParams(resolvedSearchParams);
+  const [subspace, posts, postCount] = await Promise.all([
+    getSubspace(slug),
+    getSubspacePosts(slug, page),
+    getSubspacePostCount(slug),
+  ]);
 
   if (!subspace) {
     notFound();
@@ -169,9 +204,9 @@ export default async function SubspaceDetailPage({
             </h2>
           </div>
         </div>
-        {subspace.posts.length > 0 ? (
+        {posts.length > 0 ? (
           <div className="grid gap-3">
-            {subspace.posts.map((post) => (
+            {posts.map((post) => (
               <article
                 className="grid gap-3 rounded-lg border border-border bg-panel p-5"
                 key={post.id}
@@ -226,6 +261,9 @@ export default async function SubspaceDetailPage({
             </p>
           </div>
         )}
+        {postCount > 0 ? (
+          <PaginationControls page={page} total={postCount} />
+        ) : null}
       </section>
     </main>
   );
