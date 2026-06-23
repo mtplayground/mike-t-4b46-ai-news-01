@@ -39,6 +39,7 @@ export function AdminLoginForm({ returnTo }: AdminLoginFormProps) {
         return;
       }
 
+      await response.text();
       window.location.assign(getSafeReturnTo(returnTo));
     } catch (requestError) {
       console.error("Unable to complete admin sign-in", requestError);
