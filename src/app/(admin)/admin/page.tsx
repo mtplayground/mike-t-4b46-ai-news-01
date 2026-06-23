@@ -8,100 +8,129 @@ import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-async function getSubspaces(): Promise<SerializedSubspace[]> {
-  const subspaces = await prisma.subspace.findMany({
-    orderBy: [
-      {
-        name: "asc",
-      },
-      {
-        createdAt: "asc",
-      },
-    ],
-  });
+type ErrorWithDigest = Error & { digest?: string };
 
-  return subspaces.map((subspace) => ({
-    createdAt: subspace.createdAt.toISOString(),
-    description: subspace.description,
-    id: subspace.id,
-    name: subspace.name,
-    slug: subspace.slug,
-    updatedAt: subspace.updatedAt.toISOString(),
-  }));
+function getErrorDigest(error: unknown): string | undefined {
+  return error instanceof Error ? (error as ErrorWithDigest).digest : undefined;
+}
+
+function logAdminLoaderError(loader: string, error: unknown): void {
+  console.error("[admin page] failed to load page data", {
+    digest: getErrorDigest(error),
+    error,
+    loader,
+  });
+}
+
+async function getSubspaces(): Promise<SerializedSubspace[]> {
+  try {
+    const subspaces = await prisma.subspace.findMany({
+      orderBy: [
+        {
+          name: "asc",
+        },
+        {
+          createdAt: "asc",
+        },
+      ],
+    });
+
+    return subspaces.map((subspace) => ({
+      createdAt: subspace.createdAt.toISOString(),
+      description: subspace.description,
+      id: subspace.id,
+      name: subspace.name,
+      slug: subspace.slug,
+      updatedAt: subspace.updatedAt.toISOString(),
+    }));
+  } catch (error) {
+    logAdminLoaderError("getSubspaces", error);
+    throw error;
+  }
 }
 
 async function getTags(): Promise<SerializedTag[]> {
-  const tags = await prisma.tag.findMany({
-    orderBy: [
-      {
-        name: "asc",
-      },
-      {
-        createdAt: "asc",
-      },
-    ],
-  });
+  try {
+    const tags = await prisma.tag.findMany({
+      orderBy: [
+        {
+          name: "asc",
+        },
+        {
+          createdAt: "asc",
+        },
+      ],
+    });
 
-  return tags.map((tag) => ({
-    createdAt: tag.createdAt.toISOString(),
-    id: tag.id,
-    name: tag.name,
-    slug: tag.slug,
-    updatedAt: tag.updatedAt.toISOString(),
-  }));
-}
-
-async function getPosts(): Promise<SerializedPost[]> {
-  const posts = await prisma.post.findMany({
-    include: {
-      author: {
-        select: {
-          email: true,
-          name: true,
-          pictureUrl: true,
-          sub: true,
-        },
-      },
-      subspace: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-        },
-      },
-      tags: {
-        include: {
-          tag: true,
-        },
-        orderBy: {
-          tag: {
-            name: "asc",
-          },
-        },
-      },
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
-  });
-
-  return posts.map((post) => ({
-    author: post.author,
-    authorSub: post.authorSub,
-    bodyMarkdown: post.bodyMarkdown,
-    createdAt: post.createdAt.toISOString(),
-    id: post.id,
-    subspace: post.subspace,
-    subspaceId: post.subspaceId,
-    tags: post.tags.map(({ tag }) => ({
+    return tags.map((tag) => ({
       createdAt: tag.createdAt.toISOString(),
       id: tag.id,
       name: tag.name,
       slug: tag.slug,
       updatedAt: tag.updatedAt.toISOString(),
-    })),
-    updatedAt: post.updatedAt.toISOString(),
-  }));
+    }));
+  } catch (error) {
+    logAdminLoaderError("getTags", error);
+    throw error;
+  }
+}
+
+async function getPosts(): Promise<SerializedPost[]> {
+  try {
+    const posts = await prisma.post.findMany({
+      include: {
+        author: {
+          select: {
+            email: true,
+            name: true,
+            pictureUrl: true,
+            sub: true,
+          },
+        },
+        subspace: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+        tags: {
+          include: {
+            tag: true,
+          },
+          orderBy: {
+            tag: {
+              name: "asc",
+            },
+          },
+        },
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+    });
+
+    return posts.map((post) => ({
+      author: post.author,
+      authorSub: post.authorSub,
+      bodyMarkdown: post.bodyMarkdown,
+      createdAt: post.createdAt.toISOString(),
+      id: post.id,
+      subspace: post.subspace,
+      subspaceId: post.subspaceId,
+      tags: post.tags.map(({ tag }) => ({
+        createdAt: tag.createdAt.toISOString(),
+        id: tag.id,
+        name: tag.name,
+        slug: tag.slug,
+        updatedAt: tag.updatedAt.toISOString(),
+      })),
+      updatedAt: post.updatedAt.toISOString(),
+    }));
+  } catch (error) {
+    logAdminLoaderError("getPosts", error);
+    throw error;
+  }
 }
 
 export default async function AdminPage() {
