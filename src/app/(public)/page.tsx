@@ -215,7 +215,7 @@ export default async function HomePage() {
                 key={post.id}
               >
                 <div className="grid gap-1">
-                  <p className="m-0 break-all text-xs font-bold uppercase text-accent-strong">
+                  <p className="m-0 break-all text-xs font-bold text-accent-strong">
                     /{post.subspace.slug}
                   </p>
                   <h3 className="m-0 text-xl">

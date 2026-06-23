@@ -172,7 +172,7 @@ export default async function PostDetailPage({ params }: PostDetailPageProps) {
       </nav>
 
       <header className="grid gap-4">
-        <p className="m-0 break-all text-sm font-bold uppercase text-accent-strong">
+        <p className="m-0 break-all text-sm font-bold text-accent-strong">
           /{post.subspace.slug}/{post.id}
         </p>
         <h1 className="m-0 text-4xl leading-tight sm:text-6xl">{title}</h1>

@@ -141,7 +141,7 @@ export default async function SubspaceDetailPage({
       </nav>
 
       <header className="grid gap-3">
-        <p className="m-0 break-all text-sm font-bold uppercase text-accent-strong">
+        <p className="m-0 break-all text-sm font-bold text-accent-strong">
           /{subspace.slug}
         </p>
         <h1 className="m-0 max-w-3xl text-4xl leading-tight sm:text-6xl">
