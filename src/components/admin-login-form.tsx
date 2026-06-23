@@ -19,27 +19,41 @@ export function AdminLoginForm({ returnTo }: AdminLoginFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  async function requestAdminLogin(): Promise<Response> {
+    const response = await fetch("/api/admin/login", {
+      body: JSON.stringify({ password }),
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    await response.text();
+
+    return response;
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("/api/admin/login", {
-        body: JSON.stringify({ password }),
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-      });
+      let response: Response;
+
+      try {
+        response = await requestAdminLogin();
+      } catch {
+        response = await requestAdminLogin();
+      }
 
       if (!response.ok) {
         setError("The admin password was not accepted.");
         return;
       }
 
-      await response.text();
       window.location.assign(getSafeReturnTo(returnTo));
     } catch (requestError) {
       console.error("Unable to complete admin sign-in", requestError);
