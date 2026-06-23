@@ -152,7 +152,7 @@ export default async function TagDetailPage({ params }: TagDetailPageProps) {
       </nav>
 
       <header className="grid gap-3">
-        <p className="m-0 break-all text-sm font-bold uppercase text-accent-strong">
+        <p className="m-0 break-all text-sm font-bold text-accent-strong">
           #{tag.slug}
         </p>
         <h1 className="m-0 max-w-3xl text-4xl leading-tight sm:text-6xl">
@@ -183,7 +183,7 @@ export default async function TagDetailPage({ params }: TagDetailPageProps) {
                 key={post.id}
               >
                 <div className="grid gap-1">
-                  <p className="m-0 break-all text-xs font-bold uppercase text-accent-strong">
+                  <p className="m-0 break-all text-xs font-bold text-accent-strong">
                     <Link
                       className="text-accent-strong no-underline"
                       href={`/s/${post.subspace.slug}`}
