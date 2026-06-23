@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PaginationControls } from "@/components/pagination-controls";
 import { prisma } from "@/lib/db";
 import {
   buildPageMetadata,
@@ -8,6 +9,11 @@ import {
   SITE_DESCRIPTION,
   SITE_NAME,
 } from "@/lib/page-metadata";
+import {
+  getPageFromSearchParams,
+  getPagination,
+  type PaginationSearchParams,
+} from "@/lib/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +24,13 @@ export const metadata: Metadata = buildPageMetadata({
   title: SITE_NAME,
 });
 
-const LATEST_POST_LIMIT = 20;
-
 type ErrorWithDigest = Error & { digest?: string };
 
 type HomeUnavailableSection = "latestPosts" | "subspaces";
+
+type HomePageProps = {
+  searchParams?: Promise<PaginationSearchParams>;
+};
 
 function getErrorDigest(error: unknown): string | undefined {
   return error instanceof Error ? (error as ErrorWithDigest).digest : undefined;
@@ -80,9 +88,10 @@ function formatDate(value: Date): string {
   });
 }
 
-async function getHomeData() {
+async function getHomeData(page: number) {
   try {
     const unavailableSections: HomeUnavailableSection[] = [];
+    const pagination = getPagination(page);
     const subspacesPromise = prisma.subspace.findMany({
       orderBy: [
         {
@@ -132,12 +141,15 @@ async function getHomeData() {
       orderBy: {
         createdAt: "desc",
       },
-      take: LATEST_POST_LIMIT,
+      ...pagination,
     });
-    const [subspacesResult, latestPostsResult] = await Promise.allSettled([
-      subspacesPromise,
-      latestPostsPromise,
-    ] as const);
+    const latestPostsTotalPromise = prisma.post.count();
+    const [subspacesResult, latestPostsResult, latestPostsTotalResult] =
+      await Promise.allSettled([
+        subspacesPromise,
+        latestPostsPromise,
+        latestPostsTotalPromise,
+      ] as const);
 
     if (subspacesResult.status === "rejected") {
       unavailableSections.push("subspaces");
@@ -149,9 +161,20 @@ async function getHomeData() {
       logHomeDataError("latestPosts", latestPostsResult.reason);
     }
 
+    if (latestPostsTotalResult.status === "rejected") {
+      if (!unavailableSections.includes("latestPosts")) {
+        unavailableSections.push("latestPosts");
+      }
+      logHomeDataError("latestPosts", latestPostsTotalResult.reason);
+    }
+
     return {
       latestPosts:
         latestPostsResult.status === "fulfilled" ? latestPostsResult.value : [],
+      latestPostsTotal:
+        latestPostsTotalResult.status === "fulfilled"
+          ? latestPostsTotalResult.value
+          : 0,
       subspaces:
         subspacesResult.status === "fulfilled" ? subspacesResult.value : [],
       unavailableSections,
@@ -164,6 +187,7 @@ async function getHomeData() {
 
     return {
       latestPosts: [],
+      latestPostsTotal: 0,
       subspaces: [],
       unavailableSections: [
         "latestPosts",
@@ -173,8 +197,11 @@ async function getHomeData() {
   }
 }
 
-export default async function HomePage() {
-  const { latestPosts, subspaces, unavailableSections } = await getHomeData();
+export default async function HomePage({ searchParams }: HomePageProps) {
+  const resolvedSearchParams = await searchParams;
+  const page = getPageFromSearchParams(resolvedSearchParams);
+  const { latestPosts, latestPostsTotal, subspaces, unavailableSections } =
+    await getHomeData(page);
   const siteJsonLd = buildSiteJsonLd();
   const latestPostsUnavailable = unavailableSections.includes("latestPosts");
   const subspacesUnavailable = unavailableSections.includes("subspaces");
@@ -269,6 +296,9 @@ export default async function HomePage() {
             </p>
           </div>
         )}
+        {!latestPostsUnavailable && latestPostsTotal > 0 ? (
+          <PaginationControls page={page} total={latestPostsTotal} />
+        ) : null}
       </section>
 
       <section className="grid gap-4" aria-labelledby="subspaces-title">
